@@ -1,0 +1,68 @@
+<?xml version="1.0"?>
+
+<conf>
+    <exposing-tree>
+	 <root id="root">
+		<saving-policy>
+			<inheritable-info>
+				<metadata metadata="isanitem" value="yes"/>
+			</inheritable-info>
+		</saving-policy>
+		<content>
+			<conditions>
+				<condition  metadata="type" value="venue"/>
+			</conditions>
+			<folder id="venues">
+				<expose>
+					<name valuefrommetadata="${name}"/>
+				</expose>
+				<saving-policy inherit="no">
+					<inheritable-info>
+						<metadata metadata="venue" valuefrommetadata="oid" operator="is"/>
+					</inheritable-info>
+					<new-file extractmetadata="([a-zA-Z0-9_]*)\.([a-zA-Z0-9_]*)" >
+						<metadata metadata="name" valuefromextract="1" />
+						<metadata metadata="extension" valuefromextract="2" />
+						<metadata metadata="type" value="doc" />
+					</new-file>
+				</saving-policy>
+				<content>
+					<conditions inherit="no">
+						<condition  metadata="venue" valuefromparentmetadata="oid" operator="is" />
+					</conditions>
+					<file id="items">
+						<expose>
+							<name valuefrommetadata="${name}.${extension}"/>
+							<content type="real_file" metadata="real_path"/>
+						</expose>
+					</file>
+					<file id="hidden_metadata">
+						<expose>
+							<name valuefrommetadata=".${name}.${extension}"/>>
+							<content type="dump_metadata" metadata="*" />
+						</expose>
+					</file>
+					<file id="messages">
+						<conditions>
+							<condition  metadata="type" value="message" operator="is" />
+						</conditions>
+						<expose>
+							<name valuefrommetadata="${subject}.${extension}"/>
+							<content type="real_file" metadata="real_path"/>
+						</expose>
+					</file>
+					<file id="hidden_metadata_messages">
+						<conditions>
+							<condition  metadata="type" value="message" operator="is" />
+						</conditions>
+						<expose>
+							<name valuefrommetadata=".${subject}.${extension}"/>
+							<content type="dump_metadata" metadata="*"/>
+						</expose>
+					</file>
+				</content>
+			</folder>
+		</content>
+	 </root>
+    </exposing-tree>
+</conf>
