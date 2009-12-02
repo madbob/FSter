@@ -31,11 +31,12 @@ struct _ItemHandlerPrivate {
     ItemHandler     *parent;
     HierarchyNode   *node;
     gchar           *exposed_name;
-
-    gchar           *subject;
     gchar           *file_path;
 
+    ContentsPlugin  *contents;
+
     gboolean        newly_allocated;
+    gchar           *subject;
     GHashTable      *metadata;
     GHashTable      *tosave;
 };
@@ -48,6 +49,7 @@ enum {
     PROP_FILE,
     PROP_EXPOSED,
     PROP_SUBJECT,
+    PROP_CONTENTS,
 };
 
 G_DEFINE_TYPE (ItemHandler, item_handler, G_TYPE_OBJECT);
@@ -80,9 +82,10 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
         to_free = va_arg (params, gboolean);
 
         g_hash_table_iter_init (&iter, table);
-        while (g_hash_table_iter_next (&iter, &key, &value))
+        while (g_hash_table_iter_next (&iter, &key, &value)) {
             statements = g_list_prepend (statements, g_strdup_printf ("<%s> %s \"%s\"", item->priv->subject,
                                                                       (gchar*) key, (gchar*) value));
+        }
 
         if (to_free == TRUE)
             g_hash_table_foreach_remove (table, destroy_value_in_hash, NULL);
@@ -90,12 +93,13 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     va_end (params);
 
-    stats = from_glist_to_string (statements, " . ", TRUE);
-    query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . <%s> nie:isStoredAs <%s> . %s }",
-                             item->priv->subject, item->priv->subject, item->priv->subject, item->priv->subject, stats);
-    g_free (stats);
+    if (statements == NULL)
+        return;
 
-    printf ("======================================================================================================= %s\n", query);
+    stats = from_glist_to_string (statements, " . ", TRUE);
+    query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s }",
+                             item->priv->subject, item->priv->subject, stats);
+    g_free (stats);
 
     error = NULL;
 
@@ -160,6 +164,10 @@ static void item_handler_set_property (GObject *object, guint property_id, const
             self->priv->subject = g_value_dup_string (value);
             break;
 
+        case PROP_CONTENTS:
+            self->priv->contents = g_value_get_object (value);
+            break;
+
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (object, property_id, pspec);
             break;
@@ -193,6 +201,10 @@ static void item_handler_get_property (GObject *object, guint property_id, GValu
 
         case PROP_SUBJECT:
             g_value_set_string (value, self->priv->subject);
+            break;
+
+        case PROP_CONTENTS:
+            g_value_set_object (value, self->priv->contents);
             break;
 
         default:
@@ -256,6 +268,13 @@ static void item_handler_class_init (ItemHandlerClass *klass)
                                         NULL,
                                         G_PARAM_READWRITE);
     g_object_class_install_property (gobject_class, PROP_SUBJECT, param_spec);
+
+    param_spec = g_param_spec_object ("contents_handler",
+                                        "Contents Handler",
+                                        "Manager of the contents for the item",
+                                        CONTENTS_PLUGIN_TYPE,
+                                        G_PARAM_READWRITE);
+    g_object_class_install_property (gobject_class, PROP_CONTENTS, param_spec);
 }
 
 static void item_handler_init (ItemHandler *item)
@@ -375,6 +394,8 @@ static const gchar* fetch_metadata (ItemHandler *item, const gchar *metadata)
     error = NULL;
     query = g_strdup_printf ("SELECT ?a WHERE { <%s> %s ?a }", item->priv->subject, metadata);
 
+    printf ("========================================== %s\n", query);
+
     response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
 
     if (response == NULL) {
@@ -444,11 +465,35 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
  **/
 GList* item_handler_get_all_metadata (ItemHandler *item)
 {
-    /**
-        TODO
-    */
+    register int i;
+    gchar *query;
+    gchar **values;
+    GList *ret;
+    GPtrArray *response;
+    GError *error;
 
-    return NULL;
+    ret = NULL;
+
+    error = NULL;
+    query = g_strdup_printf ("SELECT ?predicate WHERE { <%s> ?predicate ?value }", item_handler_get_subject (item));
+    response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
+
+    if (response == NULL) {
+        g_warning ("Unable to fetch metadata: %s", error->message);
+        g_error_free (error);
+    }
+    else {
+        for (i = 0; i < response->len; i++) {
+            values = (gchar**) g_ptr_array_index (response, i);
+            ret = g_list_prepend (ret, *values);
+            g_free (values);
+        }
+
+        g_ptr_array_free (response, TRUE);
+    }
+
+    g_free (query);
+    return g_list_reverse (ret);
 }
 
 /**
@@ -500,17 +545,22 @@ static const gchar* get_file_path (ItemHandler *item)
     if (item->priv->file_path == NULL) {
         type = item_handler_get_format (item);
 
-        if (IS_VIRTUAL (type)) {
-            path = item_handler_get_metadata (item, "nie:isStoredAs");
-            if (path != NULL)
-                item->priv->file_path = g_filename_from_uri (path, NULL, NULL);
+        if (item->priv->contents != NULL) {
+            item->priv->file_path = contents_plugin_get_file (item->priv->contents, item);
         }
-        else if (IS_SHADOW (type)) {
-            /*
-                Only way to know the real path of a shadow item is to set it on
-                creation time. If it is not set, no way to guess it
-            */
-            g_warning ("Undefined path for shadow filesystem hierarchy node");
+        else {
+            if (IS_VIRTUAL (type)) {
+                path = item_handler_get_metadata (item, "nie:isStoredAs");
+                if (path != NULL)
+                    item->priv->file_path = g_filename_from_uri (path, NULL, NULL);
+            }
+            else if (IS_SHADOW (type)) {
+                /*
+                    Only way to know the real path of a shadow item is to set it on
+                    creation time. If it is not set, no way to guess it
+                */
+                g_warning ("Undefined path for shadow filesystem hierarchy node");
+            }
         }
     }
 
@@ -579,10 +629,6 @@ void item_handler_close (ItemHandler *item, int fd)
 {
     if (fd >= 0)
         close (fd);
-
-    /**
-        TODO    Inform Tracker about the contents changes?
-    */
 
     g_object_unref (item);
 }
@@ -783,7 +829,12 @@ gboolean item_handler_is_folder (ItemHandler *item)
 
 /**
  * item_handler_real_path:
- * TODO Document this
+ * @item: an #ItemHandler
+ *
+ * Retrieves the path of the real file wrapped by @item. To be used carefully, please use the
+ * appropriate functions to access the real contents of the element
+ *
+ * Return value: the real path of the #ItemHandler, or NULL if none is managed
  **/
 const gchar* item_handler_real_path (ItemHandler *item)
 {

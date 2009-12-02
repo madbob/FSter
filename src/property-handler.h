@@ -19,7 +19,7 @@
 #ifndef PROPERTY_HANDLER_H
 #define PROPERTY_HANDLER_H
 
-#include "common.h"
+#include "core.h"
 
 #define PROPERTY_HANDLER_TYPE               (property_handler_get_type ())
 #define PROPERTY_HANDLER(obj)               (G_TYPE_CHECK_INSTANCE_CAST ((obj),     \

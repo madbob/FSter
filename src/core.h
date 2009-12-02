@@ -16,30 +16,16 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMMON_INTERNALS_H
-#define COMMON_INTERNALS_H
+#ifndef CORE_INTERNALS_H
+#define CORE_INTERNALS_H
 
-#define _XOPEN_SOURCE 500
-#define _GNU_SOURCE
+#define FUSE_USE_VERSION 26
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <regex.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <attr/xattr.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+#include "common.h"
 
-#include <gio/gio.h>
+#include <fuse.h>
+#include <fuse_opt.h>
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
+#include <libtracker-client/tracker.h>
 
 #endif

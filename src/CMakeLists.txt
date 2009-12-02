@@ -15,6 +15,11 @@ ADD_DEFINITIONS(
     -Wall
     )
 
+CONFIGURE_FILE(
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
+    ${CMAKE_CURRENT_SOURCE_DIR}/config.h
+)
+
 set(avfs_SRCS
     fuse.c
     utils.c
@@ -23,9 +28,11 @@ set(avfs_SRCS
     item-handler.c
     hierarchy-node.c
     nodes-cache.c
+    contents-plugin.c
     )
 
 set(avfs_HEADERS
+    core.h
     common.h
     utils.h
     hierarchy.h
@@ -33,6 +40,7 @@ set(avfs_HEADERS
     item-handler.h
     hierarchy-node.h
     nodes-cache.h
+    contents-plugin.h
     )
 
 link_directories(
@@ -54,6 +62,7 @@ include_directories(
     )
 
 add_executable(avfs ${avfs_SRCS})
+
 target_link_libraries(avfs
     fuse
     ${GIO_LIBRARIES}

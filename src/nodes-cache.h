@@ -19,7 +19,7 @@
 #ifndef NODES_CACHE_H
 #define NODES_CACHE_H
 
-#include "common.h"
+#include "core.h"
 #include "item-handler.h"
 
 #define NODES_CACHE_TYPE                (nodes_cache_get_type ())

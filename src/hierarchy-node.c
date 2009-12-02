@@ -18,6 +18,7 @@
 
 #include "hierarchy-node.h"
 #include "property-handler.h"
+#include "contents-plugin.h"
 #include "hierarchy.h"
 #include "nodes-cache.h"
 #include "utils.h"
@@ -48,8 +49,7 @@ struct _ExposePolicy {
     gchar               *formula;
     GList               *exposed_metadata;          // list of PropertyHandler
     GList               *conditional_metadata;      // list of ValuedMetadataReference
-    gchar               *content_metadata;
-    ContentCallback     contents_callback;
+    ContentsPlugin      *contents_callback;
 };
 
 typedef struct {
@@ -127,9 +127,6 @@ static void free_expose_policy (ExposePolicy *policy)
 
     for (iter = policy->exposed_metadata; iter; iter = g_list_next (iter))
         g_object_unref ((PropertyHandler*) iter->data);
-
-    if (policy->content_metadata != NULL)
-        g_free (policy->content_metadata);
 }
 
 static void free_condition_policy (ConditionPolicy *policy)
@@ -493,75 +490,6 @@ static gboolean parse_exposing_formula (ExposePolicy *exposing, gchar *string)
     return ret;
 }
 
-/**
-    TODO    This has to be splitted in a dedicated content plugin
-*/
-static int item_content_plain (ExposePolicy *policy, ItemHandler *item, int flags)
-{
-    return item_handler_open (item, flags);
-}
-
-/**
-    TODO    This has to be splitted in a dedicated content plugin
-*/
-
-#define METADATA_DUMPS_PATH             "/tmp/.avfs_dumps/"
-
-static int item_content_dump_metadata (ExposePolicy *policy, ItemHandler *item, int flags)
-{
-    int fd;
-    FILE *file;
-    gchar *path;
-    const gchar *id;
-    const gchar *value;
-    GList *metadata_list;
-    GList *iter;
-
-    if (strcmp (policy->content_metadata, "*") == 0) {
-        id = item_handler_exposed_name (item);
-        path = g_build_filename (METADATA_DUMPS_PATH, id, NULL);
-
-        /**
-            TODO    If dump file already exists it is used, but it is not updated with latest metadata
-                    assignments and changes. Provide some kind of check and update
-        */
-        if (access (path, F_OK) != 0) {
-            metadata_list = item_handler_get_all_metadata (item);
-            file = fopen (path, "w");
-
-            if (file == NULL) {
-                g_warning ("Error dumping metadata: unable to create file in %s, %s", path, strerror (errno));
-            }
-            else {
-                for (iter = metadata_list; iter; iter = g_list_next (iter)) {
-                    value = item_handler_get_metadata (item, (gchar*) iter->data);
-
-                    if (value == NULL) {
-                        g_warning ("Error dumping metadata: '%s' exists but has no value", (gchar*) iter->data);
-                        continue;
-                    }
-
-                    fprintf (file, "%s: %s\n", (gchar*) iter->data, value);
-                }
-
-                g_list_free (metadata_list);
-                fclose (file);
-            }
-        }
-
-        fd = open (path, flags);
-        g_free (path);
-        return fd;
-    }
-
-    /**
-        TODO    Handle different situations than "dump all metadata". A syntax to express this
-                requirement is still needed in configuration specification
-    */
-
-    return -1;
-}
-
 static gint sort_conditional_metadata (gconstpointer a, gconstpointer b)
 {
     ValuedMetadataReference *first;
@@ -610,24 +538,15 @@ static gboolean parse_exposing_policy (ExposePolicy *exposing, xmlNode *root)
         else if (strcmp ((gchar*) node->name, "content") == 0) {
             str = (gchar*) xmlGetProp (node, (xmlChar*) "type");
             if (str != NULL) {
-                /**
-                    TODO    Handle contents callbacks with an external plugins system
-                */
-                if (strcmp ((gchar*) str, "real_file") == 0) {
-                    exposing->contents_callback = item_content_plain;
-                }
-                else if (strcmp ((gchar*) str, "dump_metadata") == 0) {
-                    exposing->contents_callback = item_content_dump_metadata;
-                }
-                else {
+                exposing->contents_callback = retrieve_contents_plugin (str);
+
+                if (exposing->contents_callback == NULL) {
                     g_warning ("Unable to identify contents exposing policy, found %s", (gchar*) str);
                     ret = FALSE;
                 }
 
                 xmlFree (str);
             }
-
-            exposing->content_metadata = (gchar*) xmlGetProp (node, (xmlChar*) "metadata");
         }
         else {
             g_warning ("Unrecognized tag %s", (gchar*) node->name);
@@ -939,6 +858,7 @@ static gchar* build_sparql_query (gchar to_get, GList *statements)
 static GList* build_items (HierarchyNode *node, ItemHandler *parent, GPtrArray *data, GList *required)
 {
     register int i;
+    register int a;
     gchar **values;
     GList *required_iter;
     GList *items;
@@ -948,13 +868,14 @@ static GList* build_items (HierarchyNode *node, ItemHandler *parent, GPtrArray *
 
     for (i = 0; i < data->len; i++) {
         values = (gchar**) g_ptr_array_index (data, i);
-        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", *values, NULL);
-        values++;
 
-        for (required_iter = required; required_iter && *values != NULL; required_iter = g_list_next (required_iter), values++) {
-            item_handler_load_metadata (item, (gchar*) required_iter->data, *values);
-            values++;
-        }
+        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", values [0], NULL);
+
+        for (a = 1, required_iter = required; required_iter && *values != NULL; a++, required_iter = g_list_next (required_iter), values++)
+            item_handler_load_metadata (item, (gchar*) required_iter->data, values [a]);
+
+        if (node->priv->expose_policy.contents_callback != NULL)
+            g_object_set (item, "contents_handler", node->priv->expose_policy.contents_callback, NULL);
 
         items = g_list_prepend (items, item);
     }

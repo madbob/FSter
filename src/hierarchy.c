@@ -16,14 +16,14 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "common.h"
+#include "config.h"
 #include "hierarchy.h"
-#include "nodes-cache.h"
 #include "property-handler.h"
 #include "utils.h"
 
-static HierarchyNode                    *ExposingTree;
-static NodesCache                       *Cache;
+static GList                            *LoadedContentsPlugins      = NULL;
+static HierarchyNode                    *ExposingTree               = NULL;
+static NodesCache                       *Cache                      = NULL;
 
 static void create_dummy_references ()
 {
@@ -34,6 +34,49 @@ static void create_dummy_references ()
 
     mkdir (FAKE_SAVING_FOLDER, 0770);
     mkdir (DUMMY_DIRPATH, 0770);
+}
+
+static void load_plugins ()
+{
+    int n;
+    register int i;
+    gchar *path;
+    gchar *plug_path;
+    void *plug_handler;
+    GType (*plugin_registrar) ();
+    struct dirent **namelist;
+
+    path = g_build_filename (INSTALLDIR, "share/avfs/plugins", NULL);
+
+    if (access (path, F_OK) != 0) {
+        g_warning ("Unable to access contents plugin folder, expected in %s", path);
+    }
+    else {
+        n = scandir (path, &namelist, 0, alphasort);
+
+        for (i = 0; i < n; i++) {
+            if (g_str_has_suffix (namelist [i]->d_name, ".so") == TRUE) {
+                plug_path = g_build_filename (path, namelist [i]->d_name, NULL);
+                plug_handler = dlopen (plug_path, RTLD_LAZY);
+                g_free (plug_path);
+
+                if (plug_handler == NULL) {
+                    g_warning ("Unable to open module in %s", plug_path);
+                    continue;
+                }
+
+                plugin_registrar = dlsym (plug_handler, "load_contents_plugin_type");
+                LoadedContentsPlugins = g_list_prepend (LoadedContentsPlugins, g_object_new (plugin_registrar (), NULL));
+                // dlclose (plug_handler);
+            }
+
+            free (namelist [i]);
+        }
+
+        free (namelist);
+    }
+
+    g_free (path);
 }
 
 void build_hierarchy_tree_from_xml (xmlDocPtr doc)
@@ -48,6 +91,7 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
     }
 
     properties_pool_init ();
+    load_plugins ();
 
     for (node = root->children; node; node = node->next) {
         if (strcmp ((gchar*) node->name, "exposing_tree") == 0) {
@@ -209,6 +253,25 @@ void replace_hierarchy_node (ItemHandler *old_item, ItemHandler *new_item)
     */
 
     item_handler_remove (old_item);
+}
+
+ContentsPlugin* retrieve_contents_plugin (gchar *name)
+{
+    const gchar *plug_name;
+    GList *iter;
+    ContentsPlugin *plug;
+
+    plug = NULL;
+
+    for (iter = LoadedContentsPlugins; iter; iter = g_list_next (iter)) {
+        plug = (ContentsPlugin*) iter->data;
+        plug_name = contents_plugin_get_name (plug);
+
+        if (strcmp (plug_name, name) == 0)
+            break;
+    }
+
+    return plug;
 }
 
 TrackerClient* get_tracker_client ()

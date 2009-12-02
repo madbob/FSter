@@ -19,9 +19,10 @@
 #ifndef __HIERARCHY_DEFINITIONS_H__
 #define __HIERARCHY_DEFINITIONS_H__
 
-#include "common.h"
+#include "core.h"
 #include "hierarchy.h"
 #include "item-handler.h"
+#include "contents-plugin.h"
 #include "nodes-cache.h"
 
 #define DUMMY_FILEPATH                      "/tmp/.avfs_dummy_reference"
@@ -30,6 +31,7 @@
 
 void                build_hierarchy_tree_from_xml           (xmlDocPtr doc);
 void                destroy_hierarchy_tree                  ();
+ContentsPlugin*     retrieve_contents_plugin                (gchar *name);
 
 ItemHandler*        verify_exposed_path                     (const gchar *path);
 void                replace_hierarchy_node                  (ItemHandler *old_item, ItemHandler *new_item);

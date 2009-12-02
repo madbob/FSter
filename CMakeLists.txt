@@ -3,6 +3,7 @@ cmake_minimum_required(VERSION 2.6)
 project(Filer)
 
 add_subdirectory(src)
+add_subdirectory(content-plugins)
 
 CONFIGURE_FILE(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake_uninstall.cmake.in"
@@ -11,3 +12,10 @@ CONFIGURE_FILE(
 
 ADD_CUSTOM_TARGET(uninstall
   "${CMAKE_COMMAND}" -P "${CMAKE_CURRENT_BINARY_DIR}/cmake_uninstall.cmake")
+
+IF (NOT CMAKE_INSTALL_PREFIX)
+  SET(CMAKE_INSTALL_PREFIX "/usr/local/")
+ENDIF (NOT CMAKE_INSTALL_PREFIX)
+
+INSTALL(CODE "FILE(MAKE_DIRECTORY etc/avfs)")
+INSTALL(CODE "FILE(MAKE_DIRECTORY share/avfs/plugins)")

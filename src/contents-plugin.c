@@ -16,30 +16,24 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef COMMON_INTERNALS_H
-#define COMMON_INTERNALS_H
+#include "contents-plugin.h"
 
-#define _XOPEN_SOURCE 500
-#define _GNU_SOURCE
+G_DEFINE_ABSTRACT_TYPE (ContentsPlugin, contents_plugin, G_TYPE_OBJECT);
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <fcntl.h>
-#include <unistd.h>
-#include <regex.h>
-#include <dirent.h>
-#include <pthread.h>
-#include <errno.h>
-#include <dlfcn.h>
-#include <attr/xattr.h>
-#include <sys/time.h>
-#include <sys/stat.h>
-#include <sys/types.h>
+static void contents_plugin_class_init (ContentsPluginClass *klass)
+{
+}
 
-#include <gio/gio.h>
+static void contents_plugin_init (ContentsPlugin *item)
+{
+}
 
-#include <libxml/parser.h>
-#include <libxml/tree.h>
+const gchar* contents_plugin_get_name (ContentsPlugin *self)
+{
+	return CONTENTS_PLUGIN_GET_CLASS (self)->get_name (self);
+}
 
-#endif
+gchar* contents_plugin_get_file (ContentsPlugin *self, ItemHandler *item)
+{
+	return CONTENTS_PLUGIN_GET_CLASS (self)->get_file (self, item);
+}
