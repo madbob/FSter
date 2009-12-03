@@ -35,6 +35,7 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
     const gchar *value;
     GList *metadata_list;
     GList *iter;
+    TrackerProperty *prop;
 
     id = item_handler_exposed_name (item);
     path = g_build_filename (METADATA_DUMPS_PATH, id, NULL);
@@ -52,7 +53,8 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
         }
         else {
             for (iter = metadata_list; iter; iter = g_list_next (iter)) {
-                value = item_handler_get_metadata (item, (gchar*) iter->data);
+                prop = (TrackerProperty*) iter->data;
+                value = item_handler_get_metadata (item, tracker_property_get_name (prop));
 
                 if (value == NULL) {
                     g_warning ("Error dumping metadata: '%s' exists but has no value", (gchar*) iter->data);

@@ -5,6 +5,7 @@ set(CMAKE_MODULE_PATH
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBXML REQUIRED libxml-2.0)
+pkg_check_modules(TRACKER REQUIRED tracker-client-0.7)
 
 ADD_DEFINITIONS(
     -Wall
@@ -21,12 +22,18 @@ add_library(dumpmetadata_plugin MODULE ${dumpmetadata_plugin_SRCS})
 link_directories(
     ${GLIB_LIBRARY_DIRS}
     ${LIBXML_LIBRARY_DIRS}
+    ${TRACKER_LIBRARY_DIRS}
     )
 
 include_directories(
     ${GLIB_INCLUDE_DIRS}
     ${LIBXML_INCLUDE_DIRS}
+    ${TRACKER_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/
+    )
+
+target_link_libraries(dumpmetadata_plugin
+    tracker-common
     )
 
 install(TARGETS real_plugin DESTINATION share/avfs/plugins)

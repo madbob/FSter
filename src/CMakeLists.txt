@@ -69,6 +69,7 @@ target_link_libraries(avfs
     ${DBUSGLIB_LIBRARIES}
     ${LIBXML_LIBRARIES}
     ${TRACKER_LIBRARIES}
+    tracker-common
     )
 
 install(TARGETS avfs DESTINATION bin)

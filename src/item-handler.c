@@ -17,6 +17,7 @@
  */
 
 #include "item-handler.h"
+#include "property-handler.h"
 #include "hierarchy.h"
 #include "utils.h"
 
@@ -394,8 +395,6 @@ static const gchar* fetch_metadata (ItemHandler *item, const gchar *metadata)
     error = NULL;
     query = g_strdup_printf ("SELECT ?a WHERE { <%s> %s ?a }", item->priv->subject, metadata);
 
-    printf ("========================================== %s\n", query);
-
     response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
 
     if (response == NULL) {
@@ -474,21 +473,26 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
 
     ret = NULL;
 
+    /**
+        TODO    Populate the local ItemHandler with fetched values
+    */
+
     error = NULL;
     query = g_strdup_printf ("SELECT ?predicate WHERE { <%s> ?predicate ?value }", item_handler_get_subject (item));
     response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
 
     if (response == NULL) {
-        g_warning ("Unable to fetch metadata: %s", error->message);
+        g_warning ("Unable to fetch all metadata: %s", error->message);
         g_error_free (error);
     }
     else {
         for (i = 0; i < response->len; i++) {
             values = (gchar**) g_ptr_array_index (response, i);
-            ret = g_list_prepend (ret, *values);
+            ret = g_list_prepend (ret, properties_pool_get_by_name (*values));
             g_free (values);
         }
 
+        g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
         g_ptr_array_free (response, TRUE);
     }
 
