@@ -31,6 +31,7 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
 {
     FILE *file;
     gchar *path;
+    const gchar *name;
     const gchar *id;
     const gchar *value;
     GList *metadata_list;
@@ -45,29 +46,33 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
                 assignments and changes. Provide some kind of check and update
     */
     if (access (path, F_OK) != 0) {
-        metadata_list = item_handler_get_all_metadata (item);
         file = fopen (path, "w");
 
         if (file == NULL) {
             g_warning ("Error dumping metadata: unable to create file in %s, %s", path, strerror (errno));
         }
         else {
+            metadata_list = item_handler_get_all_metadata (item);
+
             for (iter = metadata_list; iter; iter = g_list_next (iter)) {
                 prop = (TrackerProperty*) iter->data;
-                value = item_handler_get_metadata (item, tracker_property_get_name (prop));
+                name = tracker_property_get_name (prop);
+                value = item_handler_get_metadata (item, name);
 
                 if (value == NULL) {
                     g_warning ("Error dumping metadata: '%s' exists but has no value", (gchar*) iter->data);
                     continue;
                 }
 
-                fprintf (file, "%s: %s\n", (gchar*) iter->data, value);
+                fprintf (file, "%s: %s\n", name, value);
             }
 
             g_list_free (metadata_list);
             fclose (file);
         }
     }
+
+    printf ("=========================================================================================== dump metadata path = %s\n", path);
 
     return path;
 }

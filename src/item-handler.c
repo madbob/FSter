@@ -488,8 +488,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
     else {
         for (i = 0; i < response->len; i++) {
             values = (gchar**) g_ptr_array_index (response, i);
-            ret = g_list_prepend (ret, properties_pool_get_by_name (*values));
-            g_free (values);
+            ret = g_list_prepend (ret, properties_pool_get_by_uri (*values));
         }
 
         g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
