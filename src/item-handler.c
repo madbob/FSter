@@ -459,8 +459,8 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
  * Permits to obtain the list of all metadata attached to an #ItemHandler.
  * Those names can be then used with item_handler_get_metadata()
  *
- * Return value: a list of strings containing all metadata assigned to the
- * specified @item
+ * Return value: a list of TrackerProperty, each of them rappresenting one of the metadata
+ * assigned to @item
  **/
 GList* item_handler_get_all_metadata (ItemHandler *item)
 {
@@ -470,15 +470,11 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
     GList *ret;
     GPtrArray *response;
     GError *error;
+    TrackerProperty *prop;
 
     ret = NULL;
-
-    /**
-        TODO    Populate the local ItemHandler with fetched values
-    */
-
     error = NULL;
-    query = g_strdup_printf ("SELECT ?predicate WHERE { <%s> ?predicate ?value }", item_handler_get_subject (item));
+    query = g_strdup_printf ("SELECT ?predicate ?value WHERE { <%s> ?predicate ?value }", item_handler_get_subject (item));
     response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
 
     if (response == NULL) {
@@ -488,7 +484,9 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
     else {
         for (i = 0; i < response->len; i++) {
             values = (gchar**) g_ptr_array_index (response, i);
-            ret = g_list_prepend (ret, properties_pool_get_by_uri (*values));
+            prop = properties_pool_get_by_uri (values [0]);
+            item_handler_load_metadata (item, tracker_property_get_name (prop), values [1]);
+            ret = g_list_prepend (ret, prop);
         }
 
         g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
