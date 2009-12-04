@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -46,7 +46,7 @@ static void load_plugins ()
     GType (*plugin_registrar) ();
     struct dirent **namelist;
 
-    path = g_build_filename (INSTALLDIR, "share/avfs/plugins", NULL);
+    path = g_build_filename (INSTALLDIR, "share/fster/plugins", NULL);
 
     if (access (path, F_OK) != 0) {
         g_warning ("Unable to access contents plugin folder, expected in %s", path);

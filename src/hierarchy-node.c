@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -1256,11 +1256,11 @@ static void assign_path (ItemHandler *item)
             TODO    The effective saving-tree has to be used to retrieve the real path of the new
                     item, this portion has to be removed as soon as possible
         */
-        path = g_build_filename (getenv ("HOME"), ".avfs_saving", NULL);
+        path = g_build_filename (getenv ("HOME"), ".fster_saving", NULL);
         check_and_create_folder (path);
         g_free (path);
 
-        path = g_build_filename (getenv ("HOME"), ".avfs_saving", "XXXXXX", NULL);
+        path = g_build_filename (getenv ("HOME"), ".fster_saving", "XXXXXX", NULL);
 
         if (item_handler_is_folder (item)) {
             mkdtemp (path);

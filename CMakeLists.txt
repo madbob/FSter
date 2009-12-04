@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 2.6)
 
-project(Filer)
+project(FSter)
 
 add_subdirectory(src)
 add_subdirectory(content-plugins)
@@ -17,5 +17,5 @@ IF (NOT CMAKE_INSTALL_PREFIX)
   SET(CMAKE_INSTALL_PREFIX "/usr/local/")
 ENDIF (NOT CMAKE_INSTALL_PREFIX)
 
-INSTALL(CODE "FILE(MAKE_DIRECTORY etc/avfs)")
-INSTALL(CODE "FILE(MAKE_DIRECTORY share/avfs/plugins)")
+INSTALL(CODE "FILE(MAKE_DIRECTORY etc/fster)")
+INSTALL(CODE "FILE(MAKE_DIRECTORY share/fster/plugins)")

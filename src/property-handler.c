@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -36,11 +36,6 @@
 #define NRL_PREFIX TRACKER_NRL_PREFIX
 #define NRL_INVERSE_FUNCTIONAL_PROPERTY TRACKER_NRL_PREFIX "InverseFunctionalProperty"
 #define NRL_MAX_CARDINALITY NRL_PREFIX "maxCardinality"
-
-/*
-    TODO: better handling of properties populating the tracker-ontology store
-    tracker-sparql -q "SELECT ?s WHERE { ?s rdf:type rdf:Property . filter(?s=itsme:toSend)}"
-*/
 
 static TrackerClass* class_get_by_uri (gchar *uri);
 

@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -25,9 +25,9 @@
 #include "contents-plugin.h"
 #include "nodes-cache.h"
 
-#define DUMMY_FILEPATH                      "/tmp/.avfs_dummy_reference"
-#define DUMMY_DIRPATH                       "/tmp/.avfs_dummy_folder"
-#define FAKE_SAVING_FOLDER                  "/tmp/.avfs_contents"
+#define DUMMY_FILEPATH                      "/tmp/.fster_dummy_reference"
+#define DUMMY_DIRPATH                       "/tmp/.fster_dummy_folder"
+#define FAKE_SAVING_FOLDER                  "/tmp/.fster_contents"
 
 void                build_hierarchy_tree_from_xml           (xmlDocPtr doc);
 void                destroy_hierarchy_tree                  ();

@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -19,7 +19,7 @@
 #include "core.h"
 #include "hierarchy.h"
 
-#define DEFAULT_CONFIG_FILE         "/etc/guglielmo/avfs/avfs.xml"
+#define DEFAULT_CONFIG_FILE         "/etc/fster/fster.xml"
 
 /*
     Pointers have different sizes on 32 and 64 bits architectures
@@ -60,10 +60,13 @@
 #endif
 
 enum {
+    KEY_HELP,
     KEY_CONFIGFILE
 };
 
-static struct fuse_opt filer_opts [] = {
+static struct fuse_opt fster_opts [] = {
+    FUSE_OPT_KEY ("-h",         KEY_HELP),
+    FUSE_OPT_KEY ("--help",     KEY_HELP),
     FUSE_OPT_KEY ("-c ",        KEY_CONFIGFILE),
     FUSE_OPT_END
 };
@@ -120,7 +123,13 @@ static void free_conf ()
 }
 
 /**
-    FIXME   Document this
+    Creates a new item in the hierarchy
+
+    @param path             Path where the item must be created
+    @param type             Type of the new item, essentially if it is a file or a folder
+    @param target           Pointer which will be assigned to the newly allocated item
+
+    @return                 0 if successful, otherwise a negative value describing the error
 */
 static int create_item_by_path (const gchar *path, NODE_TYPE type, ItemHandler **target)
 {
@@ -653,7 +662,12 @@ static int ifs_statfs (const char *path, struct statvfs *stbuf)
 }
 
 /**
-    FIXME   Document this
+    To flush an opened file
+
+    @param path             Path of the file to flush
+    @param fi               Informations about the opened file
+
+    @return                 0 if successful, otherwise a negative value describing the error
 */
 static int ifs_flush (const char *path, struct fuse_file_info *fi)
 {
@@ -797,9 +811,29 @@ static struct fuse_operations ifs_oper = {
     .fsync          = ifs_fsync,
 };
 
-static int filer_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
+static void usage ()
+{
+    fprintf (stderr,
+"general options:\n"
+"    -o opt,[opt...]        mount options\n"
+"    -h   --help            print help\n"
+"    -V   --version         print version\n"
+"\n"
+"FSter options:\n"
+"   -c FILE                 specify a configuration file\n"
+"\n");
+}
+
+static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
 {
     switch (key) {
+        case KEY_HELP:
+            usage ();
+            fuse_opt_add_arg (outargs, "-ho");
+            fuse_main (outargs->argc, outargs->argv, &ifs_oper, NULL);
+            exit (0);
+            break;
+
         case KEY_CONFIGFILE:
             Config.conf_file = g_strdup (arg + 2);
             break;
@@ -823,7 +857,7 @@ int main (int argc, char *argv [])
     g_type_init ();
     memset (&Config, 0, sizeof (Config));
 
-    if (fuse_opt_parse (&args, &Config, filer_opts, filer_opt_proc) == -1) {
+    if (fuse_opt_parse (&args, &Config, fster_opts, fster_opt_proc) == -1) {
         free_conf ();
         exit (1);
     }

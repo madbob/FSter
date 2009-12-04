@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -289,7 +289,15 @@ static void item_handler_init (ItemHandler *item)
 
 /**
  * item_handler_new_alloc:
- * FIXME    Document this!
+ * @type: type of the new #ItemHandler
+ * @node: logical node describing the item in the hierarchy
+ * @parent: direct item of the upper level in the hierarchy
+ *
+ * Allocates a new item. Please note this is not placed in the hierarchy, and
+ * it is not saved on Tracker: on the beginning all essential metadata are
+ * assigned out from here
+ *
+ * Return value: a newly allocated #ItemHandler
  **/
 ItemHandler* item_handler_new_alloc (CONTENT_TYPE type, HierarchyNode *node, ItemHandler *parent)
 {
@@ -418,8 +426,12 @@ static const gchar* fetch_metadata (ItemHandler *item, const gchar *metadata)
 
 /**
  * item_handler_get_subject:
+ * @item: an #ItemHandler
  *
- * FIXME    Document this
+ * Retrieves the subject for @item in Tracker. May be valid only on items of
+ * type ITEM_IS_VIRTUAL_ITEM
+ *
+ * Return value: the subject used to identify the @item
  */
 const gchar* item_handler_get_subject (ItemHandler *item)
 {

@@ -1,6 +1,6 @@
 /*  Copyright (C) 2009 Itsme S.r.L.
  *
- *  This file is part of Filer
+ *  This file is part of FSter
  *
  *  Guglielmo is free software; you can redistribute it and/or modify
  *  it under the terms of the GNU General Public License as published by
@@ -18,7 +18,7 @@
 
 #include "contents-dumpmetadata-plugin.h"
 
-#define METADATA_DUMPS_PATH             "/tmp/.avfs_dumps/"
+#define METADATA_DUMPS_PATH             "/tmp/.fster_dumps/"
 
 G_DEFINE_TYPE (ContentsDumpmetadataPlugin, contents_dumpmetadata_plugin, CONTENTS_PLUGIN_TYPE);
 

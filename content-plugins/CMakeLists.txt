@@ -1,5 +1,5 @@
 set(CMAKE_MODULE_PATH
-    ${AVFS_SOURCE_DIR}/cmake/Modules
+    ${FSTER_SOURCE_DIR}/cmake/Modules
     )
 
 find_package(PkgConfig REQUIRED)
@@ -36,5 +36,5 @@ target_link_libraries(dumpmetadata_plugin
     tracker-common
     )
 
-install(TARGETS real_plugin DESTINATION share/avfs/plugins)
-install(TARGETS dumpmetadata_plugin DESTINATION share/avfs/plugins)
+install(TARGETS real_plugin DESTINATION share/fster/plugins)
+install(TARGETS dumpmetadata_plugin DESTINATION share/fster/plugins)

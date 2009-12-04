@@ -1,5 +1,5 @@
 set(CMAKE_MODULE_PATH
-    ${AVFS_SOURCE_DIR}/cmake/Modules
+    ${FSTER_SOURCE_DIR}/cmake/Modules
     )
 
 find_package(PkgConfig REQUIRED)
@@ -20,7 +20,7 @@ CONFIGURE_FILE(
     ${CMAKE_CURRENT_SOURCE_DIR}/config.h
 )
 
-set(avfs_SRCS
+set(fster_SRCS
     fuse.c
     utils.c
     hierarchy.c
@@ -31,7 +31,7 @@ set(avfs_SRCS
     contents-plugin.c
     )
 
-set(avfs_HEADERS
+set(fster_HEADERS
     core.h
     common.h
     utils.h
@@ -61,9 +61,9 @@ include_directories(
     ${TRACKER_INCLUDE_DIRS}
     )
 
-add_executable(avfs ${avfs_SRCS})
+add_executable(fster ${fster_SRCS})
 
-target_link_libraries(avfs
+target_link_libraries(fster
     fuse
     ${GIO_LIBRARIES}
     ${DBUSGLIB_LIBRARIES}
@@ -72,4 +72,4 @@ target_link_libraries(avfs
     tracker-common
     )
 
-install(TARGETS avfs DESTINATION bin)
+install(TARGETS fster DESTINATION bin)
