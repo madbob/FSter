@@ -1,8 +1,10 @@
 set(CMAKE_MODULE_PATH
-    ${FSTER_SOURCE_DIR}/cmake/Modules
+    ${FSter_SOURCE_DIR}/cmake/Modules
     )
 
 find_package(PkgConfig REQUIRED)
+find_package(Tracker REQUIRED)
+
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBXML REQUIRED libxml-2.0)
 pkg_check_modules(TRACKER REQUIRED tracker-client-0.7)
@@ -22,18 +24,20 @@ add_library(dumpmetadata_plugin MODULE ${dumpmetadata_plugin_SRCS})
 link_directories(
     ${GLIB_LIBRARY_DIRS}
     ${LIBXML_LIBRARY_DIRS}
+    ${TRACKER_CLIENT_LIBRARY_DIRS}
     ${TRACKER_LIBRARY_DIRS}
     )
 
 include_directories(
     ${GLIB_INCLUDE_DIRS}
     ${LIBXML_INCLUDE_DIRS}
+    ${TRACKER_CLIENT_INCLUDE_DIRS}
     ${TRACKER_INCLUDE_DIRS}
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/
     )
 
 target_link_libraries(dumpmetadata_plugin
-    tracker-common
+    ${TRACKER_LIBRARIES}
     )
 
 install(TARGETS real_plugin DESTINATION share/fster/plugins)

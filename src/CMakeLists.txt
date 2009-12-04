@@ -1,14 +1,16 @@
 set(CMAKE_MODULE_PATH
-    ${FSTER_SOURCE_DIR}/cmake/Modules
+    ${FSter_SOURCE_DIR}/cmake/Modules
     )
 
+
+find_package(Tracker REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FUSE REQUIRED fuse)
 pkg_check_modules(GIO REQUIRED gio-2.0)
 pkg_check_modules(GTHREAD2 REQUIRED gthread-2.0)
 pkg_check_modules(DBUSGLIB REQUIRED dbus-glib-1)
 pkg_check_modules(LIBXML REQUIRED libxml-2.0)
-pkg_check_modules(TRACKER REQUIRED tracker-client-0.7)
+pkg_check_modules(TRACKER_CLIENT REQUIRED tracker-client-0.7)
 
 ADD_DEFINITIONS(
     -D_FILE_OFFSET_BITS=64
@@ -50,6 +52,7 @@ link_directories(
     ${DBUSGLIB_LIBRARY_DIRS}
     ${LIBXML_LIBRARY_DIRS}
     ${TRACKER_LIBRARY_DIRS}
+    ${TRACKER_CLIENT_LIBRARY_DIRS}
     )
 
 include_directories(
@@ -59,6 +62,7 @@ include_directories(
     ${DBUSGLIB_INCLUDE_DIRS}
     ${LIBXML_INCLUDE_DIRS}
     ${TRACKER_INCLUDE_DIRS}
+    ${TRACKER_CLIENT_INCLUDE_DIRS}
     )
 
 add_executable(fster ${fster_SRCS})
@@ -69,7 +73,7 @@ target_link_libraries(fster
     ${DBUSGLIB_LIBRARIES}
     ${LIBXML_LIBRARIES}
     ${TRACKER_LIBRARIES}
-    tracker-common
+    ${TRACKER_CLIENT_LIBRARIES}
     )
 
 install(TARGETS fster DESTINATION bin)
