@@ -2,7 +2,6 @@ set(CMAKE_MODULE_PATH
     ${FSter_SOURCE_DIR}/cmake/Modules
     )
 
-
 find_package(Tracker REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FUSE REQUIRED fuse)
@@ -20,7 +19,7 @@ ADD_DEFINITIONS(
 CONFIGURE_FILE(
     ${CMAKE_CURRENT_SOURCE_DIR}/config.h.cmake
     ${CMAKE_CURRENT_SOURCE_DIR}/config.h
-)
+    )
 
 set(fster_SRCS
     fuse.c

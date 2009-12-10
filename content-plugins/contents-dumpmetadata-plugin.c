@@ -72,8 +72,6 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
         }
     }
 
-    printf ("=========================================================================================== dump metadata path = %s\n", path);
-
     return path;
 }
 

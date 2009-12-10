@@ -23,8 +23,7 @@
   message (STATUS "ECCO    /usr/include/${TRACKER_SUFFIX}")
   
   custom_find_path(TRACKER_INCLUDE_DIR 
-  NAMES
-    libtracker-common/tracker-common.h
+    NAMES libtracker-common/tracker-common.h
     PATHS
     ${TRACKER_PREFIX}/include
     ${INCLUDE_INSTALL_DIR}/tracker
@@ -38,7 +37,7 @@
     ${TRACKER_PREFIX}/lib
     ${LIB_INSTALL_DIR}
     /usr/lib/${TRACKER_SUFFIX}
-    /usr/lib/local/${TRACKER_SUFFIX}
+    /usr/local/lib/${TRACKER_SUFFIX}
     )
 
   # check for all the libs as required to make sure that we do not try to compile with an old version

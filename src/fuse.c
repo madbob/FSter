@@ -392,13 +392,15 @@ static int ifs_rename (const char *from, const char *to)
         return -ENOENT;
 
     target = verify_exposed_path (to);
+
     if (target == NULL) {
         res = create_item_by_path (to, item_handler_is_folder (start) ? NODE_IS_FOLDER : NODE_IS_FILE, &target);
-        if (res != 0)
-            return res;
+    }
+    else {
+        replace_hierarchy_node (start, target);
+        res = 0;
     }
 
-    replace_hierarchy_node (start, target);
     return res;
 }
 

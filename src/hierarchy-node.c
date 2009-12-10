@@ -33,12 +33,21 @@ typedef enum {
     METADATA_OPERATOR_IS_NOT_EQUAL,
 } METADATA_OPERATOR;
 
+typedef enum {
+    METADATA_HOLDER_SELF,
+    METADATA_HOLDER_PARENT,
+} METADATA_HOLDER;
+
 typedef struct {
+    METADATA_HOLDER     from;
     TrackerProperty     *metadata;
     gboolean            means_subject;
-    gchar               *get_from_parent;
-    gchar               *get_from_self;
-    gchar               *fixed_value;
+} MetadataDesc;
+
+typedef struct {
+    TrackerProperty     *metadata;
+    gchar               *formula;
+    GList               *involved;                  // list of MetadataDesc
     gchar               *comparison_value;
     METADATA_OPERATOR   operator;
     int                 get_from_extraction;
@@ -47,7 +56,7 @@ typedef struct {
 
 struct _ExposePolicy {
     gchar               *formula;
-    GList               *exposed_metadata;          // list of TrackerProperty
+    GList               *exposed_metadata;          // list of MetadataDesc
     GList               *conditional_metadata;      // list of ValuedMetadataReference
     ContentsPlugin      *contents_callback;
 };
@@ -106,27 +115,20 @@ G_DEFINE_TYPE (HierarchyNode, hierarchy_node, G_TYPE_OBJECT);
 
 static void free_metadata_reference (ValuedMetadataReference *ref)
 {
+    GList *iter;
+
     g_object_unref (ref->metadata);
 
-    if (ref->get_from_parent != NULL)
-        g_free (ref->get_from_parent);
-    if (ref->get_from_self != NULL)
-        g_free (ref->get_from_self);
-    if (ref->fixed_value != NULL)
-        g_free (ref->fixed_value);
+    for (iter = ref->involved; iter; iter = g_list_next (iter))
+        g_free (iter->data);
 
     g_free (ref);
 }
 
 static void free_expose_policy (ExposePolicy *policy)
 {
-    GList *iter;
-
     if (policy->formula != NULL)
         g_free (policy->formula);
-
-    for (iter = policy->exposed_metadata; iter; iter = g_list_next (iter))
-        g_object_unref ((TrackerProperty*) iter->data);
 }
 
 static void free_condition_policy (ConditionPolicy *policy)
@@ -229,9 +231,103 @@ static void hierarchy_node_init (HierarchyNode *node)
     memset (node->priv, 0, sizeof (HierarchyNodePrivate));
 }
 
+static GList* parse_reference_formula (gchar *value, gchar **output)
+{
+    int i;
+    int e;
+    int token_pos;
+    int offset;
+    int formula_size;
+    gboolean handled;
+    gchar *formula;
+    gchar *meta_name;
+    gchar *end_name;
+    GList *ret;
+    MetadataDesc *meta;
+
+    i = 0;
+    e = 0;
+    token_pos = 1;
+    meta = NULL;
+    ret = NULL;
+    formula_size = strlen (value) + 1;
+
+    *output = g_new0 (gchar, formula_size);
+    formula = *output;
+
+    while (value [i] != '\0') {
+        handled = FALSE;
+
+        if (value [i] == '$') {
+            if (meta == NULL)
+                meta = g_new0 (MetadataDesc, 1);
+
+            do {
+                if (strncmp (value + i + 1, "parent", 6) == 0) {
+                    meta->from = METADATA_HOLDER_PARENT;
+                    offset = 6;
+                }
+                else if (strncmp (value + i + 1, "self", 4) == 0) {
+                    meta->from = METADATA_HOLDER_SELF;
+                    offset = 4;
+                }
+                else
+                    break;
+
+                meta_name = value + i + 1 + offset;
+
+                if (*meta_name != '{')
+                    break;
+
+                meta_name++;
+
+                end_name = strchr (meta_name, '}');
+                if (end_name == NULL)
+                    break;
+
+                *end_name = '\0';
+
+                if (strcmp (meta_name, "/subject") == 0) {
+                    meta->means_subject = TRUE;
+                }
+                else {
+                    meta->metadata = properties_pool_get_by_name (meta_name);
+                    if (meta->metadata == NULL)
+                        break;
+                }
+
+                ret = g_list_prepend (ret, meta);
+                meta = NULL;
+
+                e += snprintf (formula + e, formula_size - e, "\\%d", token_pos);
+                token_pos++;
+
+                handled = TRUE;
+                i += 1 + offset + strlen (meta_name) + 1;
+
+            } while (0);
+        }
+
+        if (handled == FALSE) {
+            formula [e] = value [i];
+            e++;
+            i++;
+        }
+    }
+
+    if (meta != NULL)
+        g_free (meta);
+
+    if (ret != NULL)
+        return g_list_reverse (ret);
+    else
+        return NULL;
+}
+
 static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, xmlNode *node)
 {
     gchar *str;
+    gchar *value;
     ValuedMetadataReference *ref;
 
     if (strcmp ((gchar*) node->name, tag) != 0) {
@@ -260,44 +356,6 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
         ref->operator = METADATA_OPERATOR_IS_EQUAL;
     }
 
-    ref->fixed_value = (gchar*) xmlGetProp (node, (xmlChar*) "value");
-
-    if (ref->fixed_value == NULL) {
-        str = NULL;
-        ref->get_from_self = (gchar*) xmlGetProp (node, (xmlChar*) "valuefrommetadata");
-
-        if (ref->get_from_self == NULL) {
-            ref->get_from_parent = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromparentmetadata");
-
-            if (ref->get_from_parent == NULL) {
-                str = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromextract");
-
-                if (str != NULL) {
-                    ref->get_from_extraction = strtoull (str, NULL, 10);
-                    xmlFree (str);
-                }
-                else {
-                    g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
-                    free_metadata_reference (ref);
-                    ref = NULL;
-                }
-            }
-            else {
-                str = ref->get_from_parent;
-            }
-        }
-        else {
-            str = ref->get_from_self;
-        }
-
-        /*
-            This is to handle the special identifier "/subject", used to
-            refere to a subject instead than a specific property
-        */
-        if (str != NULL && strcmp (str, "/subject") == 0)
-            ref->means_subject = TRUE;
-    }
-
     ref->comparison_value = (gchar*) xmlGetProp (node, (xmlChar*) "ifmetadatavalue");
 
     str = (gchar*) xmlGetProp (node, (xmlChar*) "iffromextract");
@@ -310,6 +368,26 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
     if (str != NULL) {
         ref->condition_from_extraction = strtoull (str, NULL, 10);
         xmlFree (str);
+    }
+
+    value = (gchar*) xmlGetProp (node, (xmlChar*) "value");
+
+    if (value == NULL) {
+        value = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromextract");
+
+        if (value != NULL) {
+            ref->get_from_extraction = strtoull (value, NULL, 10);
+            xmlFree (value);
+        }
+        else {
+            g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
+            free_metadata_reference (ref);
+            ref = NULL;
+        }
+    }
+    else {
+        ref->involved = parse_reference_formula (value, &(ref->formula));
+        xmlFree (value);
     }
 
     return ref;
@@ -424,72 +502,6 @@ static gboolean parse_saving_policy (SavePolicy *saving, xmlNode *root)
     return ret;
 }
 
-static gboolean parse_exposing_formula (ExposePolicy *exposing, gchar *string)
-{
-    register int i;
-    register int e;
-    int a;
-    int len;
-    int offset;
-    int hop;
-    gchar *formula;
-    gchar *end_metadata;
-    gboolean ret;
-    GList *metadata;
-    GList *iter;
-
-    metadata = NULL;
-    offset = 1;
-    len = strlen (string);
-    formula = g_new0 (char, len);
-    ret = TRUE;
-
-    for (i = 0, e = 0; i < len; i++) {
-        /*
-            References to metadata (expressed as ${metadata} are translated in the formula as
-            "@N", where N is an offset identifier used to hook the underlying list.
-            Identifiers as "\N" are used to track partial strings to be set in function of a
-            particular value assumed by a metadata
-        */
-        if (string [i] == '$' && string [i + 1] == '{') {
-            a = i + 2;
-
-            end_metadata = strchr (string + a, '}');
-            if (end_metadata == NULL) {
-                ret = FALSE;
-                break;
-            }
-
-            *end_metadata = '\0';
-            metadata = g_list_prepend (metadata, properties_pool_get_by_name (string + a));
-            i = a + strlen (string + a);
-
-            hop = snprintf (formula + e, len - e, "@%d", offset);
-            offset++;
-            e += hop;
-        }
-        else {
-            formula [e] = string [i];
-            e++;
-        }
-    }
-
-    if (ret == TRUE) {
-        exposing->formula = formula;
-        exposing->exposed_metadata = g_list_reverse (metadata);
-    }
-    else {
-        g_free (formula);
-
-        for (iter = metadata; iter; iter = g_list_next (iter))
-            g_object_unref ((TrackerProperty*) iter->data);
-
-        g_list_free (metadata);
-    }
-
-    return ret;
-}
-
 static gint sort_conditional_metadata (gconstpointer a, gconstpointer b)
 {
     ValuedMetadataReference *first;
@@ -523,8 +535,7 @@ static gboolean parse_exposing_policy (ExposePolicy *exposing, xmlNode *root)
         if (strcmp ((gchar*) node->name, "name") == 0) {
             str = (gchar*) xmlGetProp (node, (xmlChar*) "value");
             if (str != NULL) {
-                if (parse_exposing_formula (exposing, str) == FALSE)
-                    ret = FALSE;
+                exposing->exposed_metadata = parse_reference_formula (str, &(exposing->formula));
                 xmlFree (str);
             }
 
@@ -732,14 +743,27 @@ CONTENT_TYPE hierarchy_node_get_format (HierarchyNode *node)
     return node->priv->type;
 }
 
+static gchar* compose_value_from_many_metadata (GList *metadata, gchar *formula)
+{
+    /**
+        TODO    Here we have to support concatenation of different objects to match a single one.
+                The main problem is to write a SPARQL query able to apply concatenation in place
+    */
+
+    g_warning ("Metadata concatenation not yet supported");
+    return NULL;
+}
+
 static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *parent, int *offset)
 {
     int value_offset;
+    int involved_num;
     gchar *stat;
     gchar *val;
     GList *iter;
     GList *statements;
     ValuedMetadataReference *meta_ref;
+    MetadataDesc *component;
     CONTENT_TYPE parent_type;
 
     statements = NULL;
@@ -749,83 +773,100 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
         meta_ref = (ValuedMetadataReference*) iter->data;
         stat = NULL;
 
-        if (meta_ref->fixed_value != NULL) {
-            if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                val = property_handler_format_value (meta_ref->metadata, meta_ref->fixed_value);
-                stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata), val);
-                g_free (val);
-            }
-            else {
-                val = property_handler_format_value (meta_ref->metadata, meta_ref->fixed_value);
-                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = %s ) )",
-                                        tracker_property_get_name (meta_ref->metadata), value_offset, value_offset, val);
-                g_free (val);
-                value_offset++;
-            }
-        }
-        else if (meta_ref->get_from_self != NULL) {
-            if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                if (meta_ref->means_subject == TRUE) {
-                    stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (meta_ref->metadata));
-                }
-                else {
-                    stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d",
-                                            tracker_property_get_name (meta_ref->metadata), value_offset,
-                                            meta_ref->get_from_self, value_offset);
-                    value_offset++;
-                }
-            }
-            else {
-                if (meta_ref->means_subject == TRUE) {
-                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = ?item ) )",
-                                            tracker_property_get_name (meta_ref->metadata), value_offset, value_offset);
-                }
-                else {
-                    stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
-                                            tracker_property_get_name (meta_ref->metadata), value_offset,
-                                            meta_ref->get_from_self, value_offset + 1,
-                                            value_offset, value_offset + 1);
-                    value_offset += 2;
-                }
-            }
-        }
-        else if (meta_ref->get_from_parent != NULL) {
-            parent_type = item_handler_get_format (parent);
-            while (parent_type != ITEM_IS_VIRTUAL_ITEM && parent_type != ITEM_IS_VIRTUAL_FOLDER) {
-                parent = item_handler_get_parent (parent);
-                parent_type = item_handler_get_format (parent);
-            }
+        involved_num = g_list_length (meta_ref->involved);
 
-            if (parent != NULL) {
+        /*
+            Here we try to optimize conditions in which the metadata has to match a specific
+            value or a specific other metadata, embedding that condition in the main SPARQL query
+        */
+
+        if (involved_num == 1 && strcmp (meta_ref->formula, "\\1") == 0) {
+            component = (MetadataDesc*) meta_ref->involved->data;
+
+            if (component->from == METADATA_HOLDER_SELF) {
                 if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                    if (meta_ref->means_subject == TRUE) {
-                        stat = g_strdup_printf ("?item %s \"%s\"",
-                                                tracker_property_get_name (meta_ref->metadata), item_handler_get_subject (parent));
+                    if (component->means_subject == TRUE) {
+                        stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (meta_ref->metadata));
                     }
                     else {
-                        stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
+                        stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d",
                                                 tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                item_handler_get_subject (parent), meta_ref->get_from_parent, value_offset);
+                                                tracker_property_get_name (component->metadata), value_offset);
                         value_offset++;
                     }
                 }
                 else {
-                    if (meta_ref->means_subject == TRUE) {
-                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = \"%s\" ) )",
-                                                tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                value_offset, item_handler_get_subject (parent));
+                    if (component->means_subject == TRUE) {
+                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = ?item ) )",
+                                                tracker_property_get_name (meta_ref->metadata), value_offset, value_offset);
                     }
                     else {
-                        stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
+                        stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
                                                 tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                item_handler_get_subject (parent), meta_ref->get_from_parent, value_offset + 1,
+                                                tracker_property_get_name (component->metadata), value_offset + 1,
                                                 value_offset, value_offset + 1);
                         value_offset += 2;
                     }
                 }
             }
-            else {
-                g_warning ("Required a parent node, but none supplied");
+            else if (component->from == METADATA_HOLDER_PARENT) {
+                parent_type = item_handler_get_format (parent);
+
+                while (parent_type != ITEM_IS_VIRTUAL_ITEM && parent_type != ITEM_IS_VIRTUAL_FOLDER) {
+                    parent = item_handler_get_parent (parent);
+                    parent_type = item_handler_get_format (parent);
+                }
+
+                if (parent != NULL) {
+                    if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
+                        if (component->means_subject == TRUE) {
+                            stat = g_strdup_printf ("?item %s \"%s\"",
+                                                    tracker_property_get_name (meta_ref->metadata), item_handler_get_subject (parent));
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
+                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                    item_handler_get_subject (parent), tracker_property_get_name (component->metadata), value_offset);
+                            value_offset++;
+                        }
+                    }
+                    else {
+                        if (component->means_subject == TRUE) {
+                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = \"%s\" ) )",
+                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                    value_offset, item_handler_get_subject (parent));
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
+                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                    item_handler_get_subject (parent), tracker_property_get_name (component->metadata), value_offset + 1,
+                                                    value_offset, value_offset + 1);
+                            value_offset += 2;
+                        }
+                    }
+                }
+                else {
+                    g_warning ("Required a parent node, but none supplied");
+                }
+            }
+        }
+        else {
+            if (involved_num == 0)
+                val = g_strdup (meta_ref->formula);
+            else
+                val = compose_value_from_many_metadata (meta_ref->involved, meta_ref->formula);
+
+            if (val != NULL) {
+                if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
+                    stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata), val);
+                }
+                else {
+                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = %s ) )",
+                                            tracker_property_get_name (meta_ref->metadata), value_offset, value_offset, val);
+                    value_offset++;
+                }
+
+                g_free (val);
             }
         }
 
@@ -905,8 +946,8 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     GList *required;
     GPtrArray *response;
     GError *error;
-    TrackerProperty *prop;
     ValuedMetadataReference *meta_ref;
+    MetadataDesc *prop;
     HierarchyNode *parent_node;
 
     var = 'a';
@@ -914,8 +955,9 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     required = NULL;
 
     for (iter = node->priv->expose_policy.exposed_metadata; iter; iter = g_list_next (iter)) {
-        prop = (TrackerProperty*) iter->data;
-        create_fetching_query_statement (tracker_property_get_name (prop), &statements, &required, &var);
+        prop = (MetadataDesc*) iter->data;
+        if (prop->from == METADATA_HOLDER_SELF)
+            create_fetching_query_statement (tracker_property_get_name (prop->metadata), &statements, &required, &var);
     }
 
     for (iter = node->priv->expose_policy.conditional_metadata; iter; iter = g_list_next (iter)) {
@@ -1105,7 +1147,56 @@ GList* hierarchy_node_get_subchildren (HierarchyNode *node, ItemHandler *parent)
     return ret;
 }
 
-static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, const gchar *name)
+static gchar* collect_from_metadata_desc_list (gchar *formula, GList *components, ItemHandler *item, ItemHandler *parent)
+{
+    int current_offset;
+    register int i;
+    const gchar *metadata_value;
+    GList *components_iter;
+    GString *val;
+    ItemHandler *reference;
+    MetadataDesc *component;
+
+    current_offset = 1;
+    components_iter = components;
+    val = g_string_new ("");
+
+    for (i = 0; formula [i] != '\0'; i++) {
+        /*
+            ASCII rulez
+        */
+        if (formula [i] == '\\' && formula [i + 1] - 0x30 == current_offset && components_iter != NULL) {
+            component = (MetadataDesc*) components_iter->data;
+
+            switch (component->from) {
+                case METADATA_HOLDER_SELF:
+                    reference = item;
+                    break;
+
+                case METADATA_HOLDER_PARENT:
+                    reference = parent;
+                    break;
+            }
+
+            if (component->means_subject == TRUE)
+                metadata_value = item_handler_get_subject (reference);
+            else
+                metadata_value = item_handler_get_metadata (reference, tracker_property_get_name (component->metadata));
+
+            g_string_append_printf (val, "%s", metadata_value);
+            components_iter = g_list_next (components_iter);
+            i++;
+            current_offset++;
+        }
+        else {
+            g_string_append_printf (val, "%c", formula [i]);
+        }
+    }
+
+    return g_string_free (val, FALSE);
+}
+
+static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, ItemHandler *parent, const gchar *name)
 {
     int num;
     int i;
@@ -1177,25 +1268,23 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, c
     for (iter = policy->assigned_metadata; iter; iter = g_list_next (iter)) {
         metadata_ref = (ValuedMetadataReference*) iter->data;
 
-        if (metadata_ref->fixed_value != NULL) {
-            if (metadata_ref->condition_from_extraction != 0) {
-                i = metadata_ref->condition_from_extraction;
-                if (i > valid_extracted_senteces || (matches [i].rm_so == matches [i].rm_eo))
-                    continue;
-            }
-
-            item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata), metadata_ref->fixed_value);
+        if (metadata_ref->condition_from_extraction != 0) {
+            i = metadata_ref->condition_from_extraction;
+            if (i > valid_extracted_senteces || (matches [i].rm_so == matches [i].rm_eo))
+                continue;
         }
 
-        /**
-            TODO    Has this to be completed with exotic metadata assignments handling?
-        */
+        str = collect_from_metadata_desc_list (metadata_ref->formula, metadata_ref->involved, item, parent);
+        if (str != NULL) {
+            item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata), str);
+            g_free (str);
+        }
     }
 }
 
 static void inherit_metadata (HierarchyNode *node, ItemHandler *item, ItemHandler *parent)
 {
-    const gchar *val;
+    gchar *val;
     GList *iter;
     ValuedMetadataReference *metadata;
 
@@ -1207,31 +1296,10 @@ static void inherit_metadata (HierarchyNode *node, ItemHandler *item, ItemHandle
     for (iter = node->priv->save_policy.inheritable_assignments; iter; iter = g_list_next (iter)) {
         metadata = (ValuedMetadataReference*) iter->data;
 
-        if (metadata->fixed_value != NULL) {
-            item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata), metadata->fixed_value);
-        }
-        else if (metadata->get_from_self != NULL) {
-            if (metadata->means_subject == TRUE)
-                val = item_handler_get_subject (item);
-            else
-                val = item_handler_get_metadata (item, metadata->get_from_self);
-
-            if (val != NULL)
-                item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata), (gchar*) val);
-        }
-        else if (metadata->get_from_parent != NULL) {
-            if (parent == NULL) {
-                g_warning ("Error: required a metadata from parent, but parent node is not set");
-            }
-            else {
-                if (metadata->means_subject == TRUE)
-                    val = item_handler_get_subject (parent);
-                else
-                    val = item_handler_get_metadata (parent, metadata->get_from_parent);
-
-                if (val != NULL)
-                    item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata), (gchar*) val);
-            }
+        val = collect_from_metadata_desc_list (metadata->formula, metadata->involved, item, parent);
+        if (val != NULL) {
+            item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata), val);
+            g_free (val);
         }
     }
 
@@ -1344,7 +1412,7 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
         new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_VIRTUAL_FOLDER : ITEM_IS_VIRTUAL_ITEM, node, parent);
         g_object_set (new_item, "exposed_name", newname, NULL);
 
-        retrieve_metadata_by_name (node, new_item, newname);
+        retrieve_metadata_by_name (node, new_item, parent, newname);
         inherit_metadata (node, new_item, parent);
         assign_path (new_item);
         item_handler_flush (new_item);
@@ -1370,15 +1438,7 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
  **/
 gchar* hierarchy_node_exposed_name_for_item (HierarchyNode *node, ItemHandler *item)
 {
-    register int i;
-    int len;
-    const gchar *val;
-    GList *metadata_iter;
-    GList *conditional_iter;
-    GString *result;
     ExposePolicy *exp;
-    TrackerProperty *prop;
-    ValuedMetadataReference *conditional;
 
     exp = &(node->priv->expose_policy);
 
@@ -1387,45 +1447,5 @@ gchar* hierarchy_node_exposed_name_for_item (HierarchyNode *node, ItemHandler *i
         return NULL;
     }
 
-    len = strlen (exp->formula);
-    metadata_iter = exp->exposed_metadata;
-    conditional_iter = exp->conditional_metadata;
-    result = g_string_new ("");
-
-    for (i = 0; i < len; i++) {
-        if (exp->formula [i] == '@' && g_ascii_isdigit (exp->formula [i + 1])) {
-            if (metadata_iter == NULL) {
-                /**
-                    TODO    Perhaps check about configuration coherence may be executed at parsing
-                */
-                g_warning ("Runtime error: required a metadata not defined in configuration");
-            }
-            else {
-                prop = (TrackerProperty*) metadata_iter->data;
-                val = item_handler_get_metadata (item, tracker_property_get_name (prop));
-
-                if (val != NULL)
-                    g_string_append_printf (result, "%s", val);
-
-                metadata_iter = g_list_next (metadata_iter);
-            }
-
-            i++;
-        }
-        else if (exp->formula [i] == '\\' && g_ascii_isdigit (exp->formula [i + 1])) {
-            conditional = (ValuedMetadataReference*) conditional_iter->data;
-            val = item_handler_get_metadata (item, tracker_property_get_name (conditional->metadata));
-
-            if (val != NULL && strcmp (val, conditional->comparison_value) == 0)
-                g_string_append_printf (result, "%s", conditional->fixed_value);
-
-            conditional_iter = g_list_next (conditional_iter);
-            i++;
-        }
-        else {
-            g_string_append_printf (result, "%c", exp->formula [i]);
-        }
-    }
-
-    return g_string_free (result, FALSE);
+    return collect_from_metadata_desc_list (exp->formula, exp->exposed_metadata, item, item_handler_get_parent (item));
 }
