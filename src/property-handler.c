@@ -90,7 +90,7 @@ static gchar* name_to_uri (gchar *name)
 
     sep = strchr (namedup, ':');
     if (sep == NULL) {
-        g_warning ("Unable to parse prefixed predicate name");
+        g_warning ("Unable to parse prefixed predicate name '%s'", name);
         return NULL;
     }
 
@@ -108,6 +108,7 @@ static gchar* name_to_uri (gchar *name)
     if (uri != NULL)
         return g_strdup_printf ("%s%s", uri, sep + 1);
 
+    g_warning ("Unable to retrieve predicate name in ontology: '%s'", name);
     return NULL;
 }
 

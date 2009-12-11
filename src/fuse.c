@@ -149,7 +149,7 @@ static int create_item_by_path (const gchar *path, NODE_TYPE type, ItemHandler *
         return -ENOTDIR;
 
     parent_type = item_handler_get_format (item);
-    if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_SHADOW_FOLDER && parent_type != ITEM_IS_STATIC_FOLDER)
+    if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_MIRROR_FOLDER && parent_type != ITEM_IS_STATIC_FOLDER)
         return -ENOTDIR;
 
     name = g_path_get_basename (path);

@@ -24,7 +24,7 @@
 #define ITEM_HANDLER_GET_PRIVATE(obj)       (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ITEM_HANDLER_TYPE, ItemHandlerPrivate))
 
 #define IS_VIRTUAL(__type)                  (__type == ITEM_IS_VIRTUAL_ITEM || __type == ITEM_IS_VIRTUAL_FOLDER)
-#define IS_SHADOW(__type)                   (__type == ITEM_IS_SHADOW_ITEM || __type == ITEM_IS_SHADOW_FOLDER)
+#define IS_MIRROR(__type)                   (__type == ITEM_IS_MIRROR_ITEM || __type == ITEM_IS_MIRROR_FOLDER)
 
 struct _ItemHandlerPrivate {
     CONTENT_TYPE    type;
@@ -453,7 +453,7 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
 {
     const gchar *ret;
 
-    if (IS_SHADOW (item_handler_get_format (item))) {
+    if (IS_MIRROR (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return NULL;
     }
@@ -521,7 +521,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
  **/
 void item_handler_set_metadata (ItemHandler *item, const char *metadata, const gchar *value)
 {
-    if (IS_SHADOW (item_handler_get_format (item))) {
+    if (IS_MIRROR (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return;
     }
@@ -542,7 +542,7 @@ void item_handler_set_metadata (ItemHandler *item, const char *metadata, const g
  */
 void item_handler_load_metadata (ItemHandler *item, const gchar *metadata, const gchar *value)
 {
-    if (IS_SHADOW (item_handler_get_format (item))) {
+    if (IS_MIRROR (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return;
     }
@@ -567,12 +567,12 @@ static const gchar* get_file_path (ItemHandler *item)
                 if (path != NULL)
                     item->priv->file_path = g_filename_from_uri (path, NULL, NULL);
             }
-            else if (IS_SHADOW (type)) {
+            else if (IS_MIRROR (type)) {
                 /*
-                    Only way to know the real path of a shadow item is to set it on
+                    Only way to know the real path of a mirror item is to set it on
                     creation time. If it is not set, no way to guess it
                 */
-                g_warning ("Undefined path for shadow filesystem hierarchy node");
+                g_warning ("Undefined path for mirror filesystem hierarchy node");
             }
         }
     }
@@ -747,7 +747,7 @@ int item_handler_access (ItemHandler *item, int mask)
  * @buf: buffer to be filled with link path
  * @size: allocation size for @buf
  *
- * To access a link hold by an #ItemHandler. To be used for ITEM_IS_SHADOW_ITEM items
+ * To access a link hold by an #ItemHandler. To be used for ITEM_IS_MIRROR_ITEM items
  *
  * Return value: 0 if the required @item is a valid link and the linked path is copied in @buf,
  * or a negative value holding the relative errno
@@ -837,7 +837,7 @@ gboolean item_handler_is_folder (ItemHandler *item)
     CONTENT_TYPE type;
 
     type = item_handler_get_format (item);
-    return (type == ITEM_IS_VIRTUAL_FOLDER || type == ITEM_IS_SHADOW_FOLDER || type == ITEM_IS_STATIC_FOLDER);
+    return (type == ITEM_IS_VIRTUAL_FOLDER || type == ITEM_IS_MIRROR_FOLDER || type == ITEM_IS_STATIC_FOLDER);
 }
 
 /**

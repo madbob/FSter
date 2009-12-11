@@ -77,7 +77,7 @@ typedef struct {
     GList               *inheritable_assignments;   // list of ValuedMetadataReference
     SaveExtractName     extraction_behaviour;
     gchar               *hijack_folder;
-} SavePolicy;
+} EditPolicy;
 
 struct _HierarchyNodePrivate {
     CONTENT_TYPE        type;
@@ -85,7 +85,7 @@ struct _HierarchyNodePrivate {
     HierarchyNode       *node;
 
     gchar               *mapped_folder;
-    SavePolicy          save_policy;
+    EditPolicy          save_policy;
     ExposePolicy        expose_policy;
     ConditionPolicy     self_policy;
     ConditionPolicy     child_policy;
@@ -107,7 +107,7 @@ struct {
     { "file",             ITEM_IS_VIRTUAL_ITEM,     FALSE },
     { "folder",           ITEM_IS_VIRTUAL_FOLDER,   FALSE },
     { "static_folder",    ITEM_IS_STATIC_FOLDER,    FALSE },
-    { "shadow_content",   ITEM_IS_SHADOW_FOLDER,    TRUE },
+    { "mirror_content",   ITEM_IS_MIRROR_FOLDER,    TRUE },
     { NULL,               0,                        FALSE }
 };
 
@@ -139,7 +139,7 @@ static void free_condition_policy (ConditionPolicy *policy)
         free_metadata_reference ((ValuedMetadataReference*) iter->data);
 }
 
-static void free_save_policy (SavePolicy *policy)
+static void free_save_policy (EditPolicy *policy)
 {
     GList *iter;
 
@@ -292,8 +292,10 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
                 }
                 else {
                     meta->metadata = properties_pool_get_by_name (meta_name);
-                    if (meta->metadata == NULL)
+                    if (meta->metadata == NULL) {
+                        g_warning ("Unable to retrieve metadata claimed in rule: %s\n", meta_name);
                         break;
+                    }
                 }
 
                 ret = g_list_prepend (ret, meta);
@@ -433,7 +435,7 @@ static gint sort_extraction_metadata (gconstpointer a, gconstpointer b)
     return 0;
 }
 
-static gboolean parse_saving_policy (SavePolicy *saving, xmlNode *root)
+static gboolean parse_editing_policy (EditPolicy *saving, xmlNode *root)
 {
     gchar *str;
     gboolean ret;
@@ -484,7 +486,7 @@ static gboolean parse_saving_policy (SavePolicy *saving, xmlNode *root)
             if (ret == TRUE)
                 saving->extraction_behaviour.assigned_metadata = g_list_sort (saving->extraction_behaviour.assigned_metadata, sort_extraction_metadata);
         }
-        else if (strcmp ((gchar*) node->name, "new_shadow_content") == 0) {
+        else if (strcmp ((gchar*) node->name, "new_mirror_content") == 0) {
             str = (gchar*) xmlGetProp (root, (xmlChar*) "base_path");
             if (str != NULL) {
                 saving->hijack_folder = expand_path_to_absolute (str);
@@ -522,47 +524,24 @@ static gint sort_conditional_metadata (gconstpointer a, gconstpointer b)
     return 0;
 }
 
-static gboolean parse_exposing_policy (ExposePolicy *exposing, xmlNode *root)
+static gboolean parse_content_policy (HierarchyNode *parent, xmlNode *root)
 {
-    gchar *str;
     gboolean ret;
+    GList *children;
     xmlNode *node;
-    xmlNode *subnode;
+    HierarchyNode *child;
 
+    children = NULL;
     ret = TRUE;
 
     for (node = root->children; ret == TRUE && node; node = node->next) {
-        if (strcmp ((gchar*) node->name, "name") == 0) {
-            str = (gchar*) xmlGetProp (node, (xmlChar*) "value");
-            if (str != NULL) {
-                exposing->exposed_metadata = parse_reference_formula (str, &(exposing->formula));
-                xmlFree (str);
-            }
-
-            if (node->children != NULL) {
-                for (subnode = node->children; subnode; subnode = subnode->next)
-                    exposing->conditional_metadata = g_list_prepend (exposing->conditional_metadata,
-                                                                     parse_reference_to_metadata ("derivated_value", subnode));
-                exposing->conditional_metadata = g_list_sort (exposing->conditional_metadata, sort_conditional_metadata);
-            }
-        }
-        else if (strcmp ((gchar*) node->name, "content") == 0) {
-            str = (gchar*) xmlGetProp (node, (xmlChar*) "type");
-            if (str != NULL) {
-                exposing->contents_callback = retrieve_contents_plugin (str);
-
-                if (exposing->contents_callback == NULL) {
-                    g_warning ("Unable to identify contents exposing policy, found %s", (gchar*) str);
-                    ret = FALSE;
-                }
-
-                xmlFree (str);
-            }
-        }
-        else {
-            g_warning ("Unrecognized tag %s", (gchar*) node->name);
-        }
+        child = hierarchy_node_new_from_xml (parent, node);
+        if (child != NULL)
+            children = g_list_prepend (children, child);
     }
+
+    if (children != NULL)
+        parent->priv->children = g_list_reverse (children);
 
     return ret;
 }
@@ -608,29 +587,62 @@ static gboolean parse_conditions_policy (ConditionPolicy *conditions, xmlNode *r
     return ret;
 }
 
-static gboolean parse_content_policy (HierarchyNode *parent, xmlNode *root)
+static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposing, xmlNode *root)
 {
+    gchar *str;
     gboolean ret;
-    GList *children;
     xmlNode *node;
-    HierarchyNode *child;
+    xmlNode *subnode;
 
-    children = NULL;
     ret = TRUE;
 
     for (node = root->children; ret == TRUE && node; node = node->next) {
-        if (strcmp ((gchar*) node->name, "inheritable_conditions") == 0) {
-            ret = parse_conditions_policy (&(parent->priv->child_policy), node);
+        if (strcmp ((gchar*) node->name, "name") == 0) {
+            str = (gchar*) xmlGetProp (node, (xmlChar*) "value");
+            if (str != NULL) {
+                exposing->exposed_metadata = parse_reference_formula (str, &(exposing->formula));
+                xmlFree (str);
+            }
+
+            if (node->children != NULL) {
+                for (subnode = node->children; subnode; subnode = subnode->next)
+                    exposing->conditional_metadata = g_list_prepend (exposing->conditional_metadata,
+                                                                     parse_reference_to_metadata ("derivated_value", subnode));
+                exposing->conditional_metadata = g_list_sort (exposing->conditional_metadata, sort_conditional_metadata);
+            }
+        }
+        else if (strcmp ((gchar*) node->name, "content") == 0) {
+            if (hierarchy_node_get_format (this) == ITEM_IS_VIRTUAL_ITEM) {
+                subnode = node->children;
+
+                if (subnode != NULL) {
+                    /**
+                        TODO    Better contents plugin initialization
+                    */
+
+                    str = (gchar*) subnode->name;
+                    exposing->contents_callback = retrieve_contents_plugin (str);
+
+                    if (exposing->contents_callback == NULL) {
+                        g_warning ("Unable to identify contents exposing policy, found %s", str);
+                        ret = FALSE;
+                    }
+                }
+            }
+            else {
+                ret = parse_content_policy (this, node);
+            }
+        }
+        else if (strcmp ((gchar*) node->name, "self_conditions") == 0) {
+            ret = parse_conditions_policy (&(this->priv->self_policy), node);
+        }
+        else if (strcmp ((gchar*) node->name, "inheritable_conditions") == 0) {
+            ret = parse_conditions_policy (&(this->priv->child_policy), node);
         }
         else {
-            child = hierarchy_node_new_from_xml (parent, node);
-            if (child != NULL)
-                children = g_list_prepend (children, child);
+            g_warning ("Unrecognized tag %s", (gchar*) node->name);
         }
     }
-
-    if (children != NULL)
-        parent->priv->children = g_list_reverse (children);
 
     return ret;
 }
@@ -681,17 +693,11 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
             this->priv->name = str;
 
         for (node = root->children; ret == TRUE && node; node = node->next) {
-            if (strcmp ((gchar*) node->name, "saving_policy") == 0) {
-                ret = parse_saving_policy (&(this->priv->save_policy), node);
+            if (strcmp ((gchar*) node->name, "editing_policy") == 0) {
+                ret = parse_editing_policy (&(this->priv->save_policy), node);
             }
-            else if (strcmp ((gchar*) node->name, "expose") == 0) {
-                ret = parse_exposing_policy (&(this->priv->expose_policy), node);
-            }
-            else if (strcmp ((gchar*) node->name, "content") == 0) {
-                ret = parse_content_policy (this, node);
-            }
-            else if (strcmp ((gchar*) node->name, "local_conditions") == 0) {
-                ret = parse_conditions_policy (&(this->priv->self_policy), node);
+            else if (strcmp ((gchar*) node->name, "visualization_policy") == 0) {
+                ret = parse_exposing_policy (this, &(this->priv->expose_policy), node);
             }
             else {
                 g_warning ("Unrecognized tag in %s", this->priv->name);
@@ -1020,7 +1026,7 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     ret = NULL;
 
     if (parent != NULL) {
-        if (item_handler_get_format (parent) == ITEM_IS_SHADOW_FOLDER)
+        if (item_handler_get_format (parent) == ITEM_IS_MIRROR_FOLDER)
             path = g_strdup (item_handler_real_path (parent));
     }
 
@@ -1042,9 +1048,9 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
         else {
             stat (item_path, &sbuf);
             if (S_ISDIR (sbuf.st_mode))
-                type = ITEM_IS_SHADOW_FOLDER;
+                type = ITEM_IS_MIRROR_FOLDER;
             else
-                type = ITEM_IS_SHADOW_ITEM;
+                type = ITEM_IS_MIRROR_ITEM;
 
             witem = g_object_new (ITEM_HANDLER_TYPE,
                                 "type", type,
@@ -1095,7 +1101,7 @@ GList* hierarchy_node_get_children (HierarchyNode *node, ItemHandler *parent)
 {
     GList *ret;
 
-    if (node->priv->type == ITEM_IS_SHADOW_FOLDER)
+    if (node->priv->type == ITEM_IS_MIRROR_FOLDER)
         ret = collect_children_from_filesystem (node, parent);
     else if (node->priv->type == ITEM_IS_STATIC_FOLDER)
         ret = collect_children_static (node, parent);
@@ -1125,8 +1131,8 @@ GList* hierarchy_node_get_subchildren (HierarchyNode *node, ItemHandler *parent)
 
     ret = NULL;
 
-    if (hierarchy_node_get_format (node) == ITEM_IS_SHADOW_FOLDER &&
-            parent != NULL && item_handler_get_format (parent) == ITEM_IS_SHADOW_FOLDER) {
+    if (hierarchy_node_get_format (node) == ITEM_IS_MIRROR_FOLDER &&
+            parent != NULL && item_handler_get_format (parent) == ITEM_IS_MIRROR_FOLDER) {
         ret = hierarchy_node_get_children (node, parent);
     }
     else {
@@ -1252,7 +1258,7 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
                         metadata_set = TRUE;
 
                         /*
-                            This truly depends on sorting acted in parse_saving_policy()
+                            This truly depends on sorting acted in parse_editing_policy()
                         */
                         metadata_offset = g_list_next (iter);
                         break;
@@ -1405,8 +1411,8 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
     }
 
     /*
-        Remember: not only ITEM_IS_SHADOW_FOLDERs create their contents on the specific path, but
-        every node with the new-shadow-content tag in their saving-policy
+        Remember: not only ITEM_IS_MIRROR_FOLDERs create their contents on the specific path, but
+        every node with the new_mirror_content tag in their saving-policy
     */
     if (node->priv->save_policy.hijack_folder == NULL) {
         new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_VIRTUAL_FOLDER : ITEM_IS_VIRTUAL_ITEM, node, parent);
@@ -1418,7 +1424,7 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
         item_handler_flush (new_item);
     }
     else {
-        new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_SHADOW_FOLDER : ITEM_IS_SHADOW_ITEM, node, parent);
+        new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_MIRROR_FOLDER : ITEM_IS_MIRROR_ITEM, node, parent);
         g_object_set (new_item, "exposed_name", newname, NULL);
 
         assign_path (new_item);
