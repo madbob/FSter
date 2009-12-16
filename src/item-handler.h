@@ -56,6 +56,7 @@ typedef enum {
     ITEM_IS_MIRROR_FOLDER,
     ITEM_IS_STATIC_ITEM,
     ITEM_IS_STATIC_FOLDER,
+    ITEM_IS_SET_FOLDER,
 } CONTENT_TYPE;
 
 /*
@@ -93,6 +94,8 @@ ItemHandler*    item_handler_attach_child       (ItemHandler *item, NODE_TYPE ty
 void            item_handler_remove             (ItemHandler *item);
 
 const gchar*    item_handler_get_subject        (ItemHandler *item);
+gboolean        item_handler_type_has_metadata  (ItemHandler *item);
+gboolean        item_handler_contains_metadata  (ItemHandler *item, const gchar *name);
 const gchar*    item_handler_get_metadata       (ItemHandler *item, const gchar *name);
 GList*          item_handler_get_all_metadata   (ItemHandler *item);
 void            item_handler_set_metadata       (ItemHandler *item, const gchar *name, const gchar *value);

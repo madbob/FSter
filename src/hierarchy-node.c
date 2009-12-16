@@ -84,7 +84,8 @@ struct _HierarchyNodePrivate {
     gchar               *name;
     HierarchyNode       *node;
 
-    gchar               *mapped_folder;
+    gchar               *additional_option;
+    gboolean            hide_contents;
     EditPolicy          save_policy;
     ExposePolicy        expose_policy;
     ConditionPolicy     self_policy;
@@ -101,14 +102,14 @@ enum {
 struct {
     const gchar         *tag;
     CONTENT_TYPE        type;
-    gboolean            has_base_path;
 } HierarchyDescription [] = {
-    { "root",             ITEM_IS_ROOT,             FALSE },
-    { "file",             ITEM_IS_VIRTUAL_ITEM,     FALSE },
-    { "folder",           ITEM_IS_VIRTUAL_FOLDER,   FALSE },
-    { "static_folder",    ITEM_IS_STATIC_FOLDER,    FALSE },
-    { "mirror_content",   ITEM_IS_MIRROR_FOLDER,    TRUE },
-    { NULL,               0,                        FALSE }
+    { "root",             ITEM_IS_ROOT },
+    { "file",             ITEM_IS_VIRTUAL_ITEM },
+    { "folder",           ITEM_IS_VIRTUAL_FOLDER },
+    { "static_folder",    ITEM_IS_STATIC_FOLDER },
+    { "set_folder",       ITEM_IS_SET_FOLDER },
+    { "mirror_content",   ITEM_IS_MIRROR_FOLDER },
+    { NULL,               0 }
 };
 
 G_DEFINE_TYPE (HierarchyNode, hierarchy_node, G_TYPE_OBJECT);
@@ -163,8 +164,8 @@ static void hierarchy_node_finalize (GObject *obj)
 
     node = HIERARCHY_NODE (obj);
 
-    if (node->priv->mapped_folder != NULL)
-        g_free (node->priv->mapped_folder);
+    if (node->priv->additional_option != NULL)
+        g_free (node->priv->additional_option);
 
     free_expose_policy (&(node->priv->expose_policy));
     free_condition_policy (&(node->priv->self_policy));
@@ -596,6 +597,9 @@ static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposi
 
     ret = TRUE;
 
+    this->priv->self_policy.inherit = TRUE;
+    this->priv->child_policy.inherit = TRUE;
+
     for (node = root->children; ret == TRUE && node; node = node->next) {
         if (strcmp ((gchar*) node->name, "name") == 0) {
             str = (gchar*) xmlGetProp (node, (xmlChar*) "value");
@@ -653,9 +657,30 @@ static void add_base_path (HierarchyNode *this, xmlNode *root)
 
     str = (gchar*) xmlGetProp (root, (xmlChar*) "base_path");
     if (str != NULL) {
-        this->priv->mapped_folder = expand_path_to_absolute (str);
-        this->priv->save_policy.hijack_folder = g_strdup (this->priv->mapped_folder);
+        this->priv->additional_option = expand_path_to_absolute (str);
+        this->priv->save_policy.hijack_folder = g_strdup (this->priv->additional_option);
         this->priv->save_policy.writable = TRUE;
+        free (str);
+    }
+}
+
+static void add_grouping_metadata (HierarchyNode *this, xmlNode *root)
+{
+    gchar *str;
+
+    str = (gchar*) xmlGetProp (root, (xmlChar*) "metadata");
+    if (str != NULL)
+        this->priv->additional_option = str;
+}
+
+static void add_hide_property (HierarchyNode *this, xmlNode *root)
+{
+    gchar *str;
+
+    str = (gchar*) xmlGetProp (root, (xmlChar*) "hidden");
+    if (str != NULL) {
+        if (strcmp (str, "yes") == 0)
+            this->priv->hide_contents = TRUE;
         free (str);
     }
 }
@@ -673,9 +698,12 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
         if (strcmp (HierarchyDescription [i].tag, (gchar*) root->name) == 0) {
             this->priv->type = HierarchyDescription [i].type;
 
-            if (HierarchyDescription [i].has_base_path == TRUE)
+            if (HierarchyDescription [i].type == ITEM_IS_MIRROR_FOLDER)
                 add_base_path (this, root);
+            else if (HierarchyDescription [i].type == ITEM_IS_SET_FOLDER)
+                add_grouping_metadata (this, root);
 
+            add_hide_property (this, root);
             ret = TRUE;
             break;
         }
@@ -766,11 +794,11 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     int involved_num;
     gchar *stat;
     gchar *val;
+    gchar *meta_name;
     GList *iter;
     GList *statements;
     ValuedMetadataReference *meta_ref;
     MetadataDesc *component;
-    CONTENT_TYPE parent_type;
 
     statements = NULL;
     value_offset = *offset;
@@ -816,12 +844,8 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                 }
             }
             else if (component->from == METADATA_HOLDER_PARENT) {
-                parent_type = item_handler_get_format (parent);
-
-                while (parent_type != ITEM_IS_VIRTUAL_ITEM && parent_type != ITEM_IS_VIRTUAL_FOLDER) {
+                while (parent != NULL && item_handler_type_has_metadata (parent) == FALSE)
                     parent = item_handler_get_parent (parent);
-                    parent_type = item_handler_get_format (parent);
-                }
 
                 if (parent != NULL) {
                     if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
@@ -830,10 +854,19 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                                     tracker_property_get_name (meta_ref->metadata), item_handler_get_subject (parent));
                         }
                         else {
-                            stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
-                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                    item_handler_get_subject (parent), tracker_property_get_name (component->metadata), value_offset);
-                            value_offset++;
+                            meta_name = tracker_property_get_name (component->metadata);
+
+                            if (item_handler_contains_metadata (parent, meta_name)) {
+                                stat = g_strdup_printf ("?item %s \"%s\"",
+                                                        tracker_property_get_name (meta_ref->metadata),
+                                                        item_handler_get_metadata (parent, meta_name));
+                            }
+                            else {
+                                stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
+                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                        item_handler_get_subject (parent), meta_name, value_offset);
+                                value_offset++;
+                            }
                         }
                     }
                     else {
@@ -843,11 +876,21 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                                     value_offset, item_handler_get_subject (parent));
                         }
                         else {
-                            stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
-                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                    item_handler_get_subject (parent), tracker_property_get_name (component->metadata), value_offset + 1,
-                                                    value_offset, value_offset + 1);
-                            value_offset += 2;
+                            meta_name = tracker_property_get_name (component->metadata);
+
+                            if (item_handler_contains_metadata (parent, meta_name)) {
+                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = \"%s\" ) )",
+                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                        value_offset, item_handler_get_metadata (parent, meta_name));
+                                value_offset++;
+                            }
+                            else {
+                                stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
+                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
+                                                        item_handler_get_subject (parent), meta_name, value_offset + 1,
+                                                        value_offset, value_offset + 1);
+                                value_offset += 2;
+                            }
                         }
                     }
                 }
@@ -884,13 +927,19 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     return g_list_reverse (statements);
 }
 
-static gchar* build_sparql_query (gchar to_get, GList *statements)
+static gchar* build_sparql_query (gchar *selection, gchar to_get, GList *statements)
 {
     gchar get_iter;
     gchar *stats;
     GString *query;
 
-    query = g_string_new ("SELECT ?item ");
+    if (selection == NULL) {
+        query = g_string_new ("SELECT ?item ");
+    }
+    else {
+        query = g_string_new (selection);
+        g_string_append_printf (query, " ");
+    }
 
     for (get_iter = 'a'; get_iter < to_get; get_iter++)
         g_string_append_printf (query, "?%c ", get_iter);
@@ -976,19 +1025,19 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     more_statements = condition_policy_to_sparql (&(node->priv->self_policy), parent, &values_offset);
     statements = g_list_concat (statements, more_statements);
 
-    parent_node = node->priv->node;
+    parent_node = node;
 
     while (parent_node != NULL) {
-        more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
-        statements = g_list_concat (statements, more_statements);
-
         if (parent_node->priv->child_policy.inherit == TRUE)
             parent_node = parent_node->priv->node;
         else
             break;
+
+        more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
+        statements = g_list_concat (statements, more_statements);
     }
 
-    sparql = build_sparql_query (var, statements);
+    sparql = build_sparql_query (NULL, var, statements);
     error = NULL;
 
     response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
@@ -1031,7 +1080,7 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     }
 
     if (path == NULL)
-        path = g_strdup (node->priv->mapped_folder);
+        path = g_strdup (node->priv->additional_option);
 
     cache = get_cache_reference ();
 
@@ -1087,6 +1136,62 @@ static GList* collect_children_static (HierarchyNode *node, ItemHandler *parent)
     return g_list_prepend (NULL, witem);
 }
 
+static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
+{
+    register int i;
+    int values_offset;
+    gchar **values;
+    gchar *sparql;
+    GList *items;
+    GList *statements;
+    GList *more_statements;
+    GPtrArray *response;
+    GError *error;
+    ItemHandler *item;
+    HierarchyNode *parent_node;
+
+    values_offset = 1;
+    statements = NULL;
+    statements = g_list_append (statements, g_strdup_printf ("?item %s ?a", node->priv->additional_option));
+
+    more_statements = condition_policy_to_sparql (&(node->priv->self_policy), parent, &values_offset);
+    statements = g_list_concat (statements, more_statements);
+
+    parent_node = node;
+
+    while (parent_node != NULL && parent_node->priv->child_policy.inherit == TRUE) {
+        parent_node = parent_node->priv->node;
+
+        more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
+        statements = g_list_concat (statements, more_statements);
+    }
+
+    sparql = build_sparql_query ("SELECT DISTINCT(?a)", 'a', statements);
+    error = NULL;
+
+    response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
+    if (response == NULL) {
+        g_warning ("Unable to fetch items: %s", error->message);
+        g_error_free (error);
+        return NULL;
+    }
+
+    items = NULL;
+
+    for (i = 0; i < response->len; i++) {
+        values = (gchar**) g_ptr_array_index (response, i);
+        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, NULL);
+        item_handler_load_metadata (item, node->priv->additional_option, values [0]);
+        items = g_list_prepend (items, item);
+    }
+
+    g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
+    g_ptr_array_free (response, TRUE);
+    g_free (sparql);
+
+    return g_list_reverse (items);
+}
+
 /**
  * hierarchy_node_get_children:
  * @node: a #HierarchyNode
@@ -1105,6 +1210,8 @@ GList* hierarchy_node_get_children (HierarchyNode *node, ItemHandler *parent)
         ret = collect_children_from_filesystem (node, parent);
     else if (node->priv->type == ITEM_IS_STATIC_FOLDER)
         ret = collect_children_static (node, parent);
+    else if (node->priv->type == ITEM_IS_SET_FOLDER)
+        ret = collect_children_set (node, parent);
     else
         ret = collect_children_from_storage (node, parent);
 
@@ -1151,6 +1258,22 @@ GList* hierarchy_node_get_subchildren (HierarchyNode *node, ItemHandler *parent)
     }
 
     return ret;
+}
+
+/**
+ * hierarchy_node_hide_contents:
+ * @node: a #HierarchyNode
+ *
+ * To know if contents of the specified #HierarchyNode have to be hide in the
+ * toplevel filesystem presentation. In this case, items are not listed into
+ * the folders but may be accessed when explicitely referenced
+ *
+ * Return value: TRUE if contents of the @node are required to be hidden,
+ * FALSE otherwise
+ **/
+gboolean hierarchy_node_hide_contents (HierarchyNode *node)
+{
+    return node->priv->hide_contents;
 }
 
 static gchar* collect_from_metadata_desc_list (gchar *formula, GList *components, ItemHandler *item, ItemHandler *parent)

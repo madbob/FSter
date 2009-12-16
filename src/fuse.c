@@ -149,7 +149,8 @@ static int create_item_by_path (const gchar *path, NODE_TYPE type, ItemHandler *
         return -ENOTDIR;
 
     parent_type = item_handler_get_format (item);
-    if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_MIRROR_FOLDER && parent_type != ITEM_IS_STATIC_FOLDER)
+    if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_MIRROR_FOLDER &&
+            parent_type != ITEM_IS_STATIC_FOLDER && parent_type != ITEM_IS_SET_FOLDER)
         return -ENOTDIR;
 
     name = g_path_get_basename (path);
@@ -255,6 +256,9 @@ static int ifs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
 
             for (iter = items; iter; iter = g_list_next (iter)) {
                 child = (ItemHandler*) iter->data;
+
+                if (hierarchy_node_hide_contents (item_handler_get_logic_node (child)) == TRUE)
+                    continue;
 
                 if (item_handler_stat (child, &st) == 0)
                     ptr_st = &st;

@@ -24,7 +24,11 @@
 #define ITEM_HANDLER_GET_PRIVATE(obj)       (G_TYPE_INSTANCE_GET_PRIVATE ((obj), ITEM_HANDLER_TYPE, ItemHandlerPrivate))
 
 #define IS_VIRTUAL(__type)                  (__type == ITEM_IS_VIRTUAL_ITEM || __type == ITEM_IS_VIRTUAL_FOLDER)
-#define IS_MIRROR(__type)                   (__type == ITEM_IS_MIRROR_ITEM || __type == ITEM_IS_MIRROR_FOLDER)
+
+#define HAS_NOT_META(__type)                (__type == ITEM_IS_STATIC_ITEM ||   \
+                                             __type == ITEM_IS_STATIC_FOLDER || \
+                                             __type == ITEM_IS_MIRROR_ITEM ||   \
+                                             __type == ITEM_IS_MIRROR_FOLDER)
 
 struct _ItemHandlerPrivate {
     CONTENT_TYPE    type;
@@ -230,7 +234,7 @@ static void item_handler_class_init (ItemHandlerClass *klass)
                                         "Item's type",
                                         "Type of the item",
                                         ITEM_IS_VIRTUAL_ITEM,
-                                        ITEM_IS_STATIC_FOLDER,
+                                        ITEM_IS_SET_FOLDER,
                                         ITEM_IS_VIRTUAL_ITEM,
                                         G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
     g_object_class_install_property (gobject_class, PROP_TYPE, param_spec);
@@ -439,6 +443,39 @@ const gchar* item_handler_get_subject (ItemHandler *item)
 }
 
 /**
+ * item_handler_type_has_metadata:
+ * @item: an #ItemHandler
+ *
+ * To know if the @item type has arbitrary metadata. To be used to know if
+ * that can be used in building arbitrary queries or not
+ *
+ * Return value: TRUE if @item can be used with item_handler_get_metadata(),
+ * FALSE otherwise
+ **/
+gboolean item_handler_type_has_metadata (ItemHandler *item)
+{
+    return !HAS_NOT_META (item_handler_get_format (item));
+}
+
+/**
+ * item_handler_contains_metadata:
+ * @item: an #ItemHandler
+ * @metadata: the name of the metadata to retrieve
+ *
+ * Checks if a metadata is already stored in the specified #ItemHandler.
+ * Please note this do not means "the item has this metadata assigned", but
+ * only checks the local cache of metadata without ask Tracker. To be used to
+ * optimize queries using values already fetched
+ *
+ * Return value: TRUE if @item already has @metadata in the local structure,
+ * FALSE otherwise
+ **/
+gboolean item_handler_contains_metadata (ItemHandler *item, const gchar *metadata)
+{
+    return g_hash_table_lookup_extended (item->priv->metadata, metadata, NULL, NULL);
+}
+
+/**
  * item_handler_get_metadata:
  * @item: an #ItemHandler
  * @metadata: the name of the metadata to retrieve
@@ -453,7 +490,7 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
 {
     const gchar *ret;
 
-    if (IS_MIRROR (item_handler_get_format (item))) {
+    if (HAS_NOT_META (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return NULL;
     }
@@ -521,7 +558,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
  **/
 void item_handler_set_metadata (ItemHandler *item, const char *metadata, const gchar *value)
 {
-    if (IS_MIRROR (item_handler_get_format (item))) {
+    if (HAS_NOT_META (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return;
     }
@@ -542,7 +579,7 @@ void item_handler_set_metadata (ItemHandler *item, const char *metadata, const g
  */
 void item_handler_load_metadata (ItemHandler *item, const gchar *metadata, const gchar *value)
 {
-    if (IS_MIRROR (item_handler_get_format (item))) {
+    if (HAS_NOT_META (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return;
     }
@@ -567,7 +604,7 @@ static const gchar* get_file_path (ItemHandler *item)
                 if (path != NULL)
                     item->priv->file_path = g_filename_from_uri (path, NULL, NULL);
             }
-            else if (IS_MIRROR (type)) {
+            else if (HAS_NOT_META (type)) {
                 /*
                     Only way to know the real path of a mirror item is to set it on
                     creation time. If it is not set, no way to guess it
@@ -837,7 +874,8 @@ gboolean item_handler_is_folder (ItemHandler *item)
     CONTENT_TYPE type;
 
     type = item_handler_get_format (item);
-    return (type == ITEM_IS_VIRTUAL_FOLDER || type == ITEM_IS_MIRROR_FOLDER || type == ITEM_IS_STATIC_FOLDER);
+    return (type == ITEM_IS_VIRTUAL_FOLDER || type == ITEM_IS_MIRROR_FOLDER ||
+            type == ITEM_IS_STATIC_FOLDER || type == ITEM_IS_SET_FOLDER);
 }
 
 /**
