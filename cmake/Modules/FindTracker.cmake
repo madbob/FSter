@@ -20,12 +20,12 @@
 
   set(TRACKER_SUFFIX tracker-0.7)
   include(CustomFind)
-  message (STATUS "ECCO    /usr/include/${TRACKER_SUFFIX}")
-  
+
   custom_find_path(TRACKER_INCLUDE_DIR 
     NAMES libtracker-common/tracker-common.h
     PATHS
     ${TRACKER_PREFIX}/include
+    ${TRACKER_PREFIX}/include/${TRACKER_SUFFIX}
     ${INCLUDE_INSTALL_DIR}/tracker
     /usr/include/${TRACKER_SUFFIX}
     /usr/local/include/${TRACKER_SUFFIX}
@@ -35,6 +35,7 @@
     NAMES tracker-common
     PATHS
     ${TRACKER_PREFIX}/lib
+    ${TRACKER_PREFIX}/lib/${TRACKER_SUFFIX}
     ${LIB_INSTALL_DIR}
     /usr/lib/${TRACKER_SUFFIX}
     /usr/local/lib/${TRACKER_SUFFIX}
