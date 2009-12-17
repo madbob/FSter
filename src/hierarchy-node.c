@@ -28,6 +28,8 @@
 typedef struct _ExposePolicy            ExposePolicy;
 typedef int (*ContentCallback)          (ExposePolicy *policy, ItemHandler *item, int flags);
 
+gchar       *SavingPath                 = NULL;
+
 typedef enum {
     METADATA_OPERATOR_IS_EQUAL,
     METADATA_OPERATOR_IS_NOT_EQUAL,
@@ -1493,11 +1495,11 @@ static void assign_path (ItemHandler *item)
             TODO    The effective saving-tree has to be used to retrieve the real path of the new
                     item, this portion has to be removed as soon as possible
         */
-        path = g_build_filename (getenv ("HOME"), ".fster_saving", NULL);
+        path = g_build_filename (SavingPath, NULL);
         check_and_create_folder (path);
         g_free (path);
 
-        path = g_build_filename (getenv ("HOME"), ".fster_saving", "XXXXXX", NULL);
+        path = g_build_filename (SavingPath, "XXXXXX", NULL);
 
         if (item_handler_is_folder (item)) {
             mkdtemp (path);
@@ -1617,4 +1619,16 @@ gchar* hierarchy_node_exposed_name_for_item (HierarchyNode *node, ItemHandler *i
     }
 
     return collect_from_metadata_desc_list (exp->formula, exp->exposed_metadata, item, item_handler_get_parent (item));
+}
+
+/*
+    Warning: this is only a temporary function to remove when a complete
+    saving tree management will be ready
+*/
+void hierarchy_node_set_save_path (gchar *path)
+{
+    if (SavingPath != NULL)
+        g_free (SavingPath);
+
+    SavingPath = g_strdup (path);
 }

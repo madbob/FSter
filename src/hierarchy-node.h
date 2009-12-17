@@ -64,4 +64,6 @@ ItemHandler*    hierarchy_node_add_item                     (HierarchyNode *node
 
 gchar*          hierarchy_node_exposed_name_for_item        (HierarchyNode *node, ItemHandler *item);
 
+void            hierarchy_node_set_save_path                (gchar *path);
+
 #endif

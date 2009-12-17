@@ -21,6 +21,8 @@
 #include "property-handler.h"
 #include "utils.h"
 
+#define DEFAULT_SAVE_PATH               "~/.fster_saving"
+
 static GList                            *LoadedContentsPlugins      = NULL;
 static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
@@ -81,6 +83,8 @@ static void load_plugins ()
 
 void build_hierarchy_tree_from_xml (xmlDocPtr doc)
 {
+    gboolean saving_set;
+    gchar *str;
     xmlNode *root;
     xmlNode *node;
 
@@ -92,6 +96,7 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
 
     properties_pool_init ();
     load_plugins ();
+    saving_set = FALSE;
 
     for (node = root->children; node; node = node->next) {
         if (strcmp ((gchar*) node->name, "exposing_tree") == 0) {
@@ -99,13 +104,23 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
         }
         else if (strcmp ((gchar*) node->name, "saving_tree") == 0) {
             /**
-                TODO    Handle saving-tree
+                TODO    Handle complete saving-tree
             */
+
+            str = (gchar*) xmlGetProp (node, (xmlChar*) "base_path");
+            if (str != NULL) {
+                hierarchy_node_set_save_path (str);
+                xmlFree (str);
+                saving_set = TRUE;
+            }
         }
         else {
             g_warning ("Error: unrecognized tag '%s'", (gchar*) node->name);
         }
     }
+
+    if (saving_set == FALSE)
+        hierarchy_node_set_save_path (DEFAULT_SAVE_PATH);
 
     create_dummy_references ();
     Cache = nodes_cache_new ();
@@ -115,6 +130,7 @@ void destroy_hierarchy_tree ()
 {
     g_object_unref (Cache);
     g_object_unref (ExposingTree);
+    hierarchy_node_set_save_path (NULL);
     tracker_disconnect (get_tracker_client ());
     properties_pool_finish ();
 }
