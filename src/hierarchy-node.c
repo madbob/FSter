@@ -109,6 +109,7 @@ struct {
     { "static_folder",    ITEM_IS_STATIC_FOLDER },
     { "set_folder",       ITEM_IS_SET_FOLDER },
     { "mirror_content",   ITEM_IS_MIRROR_FOLDER },
+    { "system_folders",   ITEM_IS_MIRROR_FOLDER },
     { NULL,               0 }
 };
 
@@ -654,17 +655,26 @@ static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposi
     return ret;
 }
 
-static void add_base_path (HierarchyNode *this, xmlNode *root)
+static void add_base_path (HierarchyNode *this, gchar *path, xmlNode *root)
 {
     gchar *str;
 
-    str = (gchar*) xmlGetProp (root, (xmlChar*) "base_path");
-    if (str != NULL) {
-        this->priv->additional_option = expand_path_to_absolute (str);
-        this->priv->save_policy.hijack_folder = g_strdup (this->priv->additional_option);
-        this->priv->save_policy.writable = TRUE;
-        free (str);
+    if (path == NULL) {
+        str = (gchar*) xmlGetProp (root, (xmlChar*) "base_path");
+        if (str != NULL) {
+            this->priv->additional_option = expand_path_to_absolute (str);
+            free (str);
+        }
+        else {
+            g_warning ("Undefined base path for mirror node");
+        }
     }
+    else {
+        this->priv->additional_option = expand_path_to_absolute (path);
+    }
+
+    this->priv->save_policy.hijack_folder = g_strdup (this->priv->additional_option);
+    this->priv->save_policy.writable = TRUE;
 }
 
 static void add_grouping_metadata (HierarchyNode *this, xmlNode *root)
@@ -701,10 +711,19 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
         if (strcmp (HierarchyDescription [i].tag, (gchar*) root->name) == 0) {
             this->priv->type = HierarchyDescription [i].type;
 
-            if (HierarchyDescription [i].type == ITEM_IS_MIRROR_FOLDER)
-                add_base_path (this, root);
-            else if (HierarchyDescription [i].type == ITEM_IS_SET_FOLDER)
+            if (HierarchyDescription [i].type == ITEM_IS_MIRROR_FOLDER) {
+                /*
+                    <system_folders> are managed just as <mirror_content>,
+                    but as predefined base_path uses "/"
+                */
+                if (strcmp (HierarchyDescription [i].tag, "system_folders") == 0)
+                    add_base_path (this, "/", NULL);
+                else
+                    add_base_path (this, NULL, root);
+            }
+            else if (HierarchyDescription [i].type == ITEM_IS_SET_FOLDER) {
                 add_grouping_metadata (this, root);
+            }
 
             add_hide_property (this, root);
             ret = TRUE;
