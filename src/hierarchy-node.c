@@ -345,7 +345,10 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
     }
 
     ref = g_new0 (ValuedMetadataReference, 1);
+
     ref->metadata = properties_pool_get_by_name (str);
+    if (ref->metadata == NULL)
+        return NULL;
 
     str = (gchar*) xmlGetProp (node, (xmlChar*) "operator");
     if (str != NULL) {
@@ -794,7 +797,8 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     int involved_num;
     gchar *stat;
     gchar *val;
-    gchar *meta_name;
+    gchar *true_val;
+    const gchar *meta_name;
     GList *iter;
     GList *statements;
     ValuedMetadataReference *meta_ref;
@@ -906,6 +910,16 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                 val = compose_value_from_many_metadata (meta_ref->involved, meta_ref->formula);
 
             if (val != NULL) {
+                switch (tracker_property_get_data_type (meta_ref->metadata)) {
+                    case TRACKER_PROPERTY_TYPE_STRING:
+                        true_val = g_strdup_printf ("\"%s\"", val);
+                        g_free (val);
+                        val = true_val;
+                        break;
+                    default:
+                        break;
+                }
+
                 if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
                     stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata), val);
                 }
@@ -1025,16 +1039,18 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     more_statements = condition_policy_to_sparql (&(node->priv->self_policy), parent, &values_offset);
     statements = g_list_concat (statements, more_statements);
 
-    parent_node = node;
+    if (node->priv->child_policy.inherit == TRUE) {
+        parent_node = node->priv->node;
 
-    while (parent_node != NULL) {
-        if (parent_node->priv->child_policy.inherit == TRUE)
-            parent_node = parent_node->priv->node;
-        else
-            break;
+        while (parent_node != NULL) {
+            more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
+            statements = g_list_concat (statements, more_statements);
 
-        more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
-        statements = g_list_concat (statements, more_statements);
+            if (parent_node->priv->child_policy.inherit == TRUE)
+                parent_node = parent_node->priv->node;
+            else
+                break;
+        }
     }
 
     sparql = build_sparql_query (NULL, var, statements);
@@ -1157,13 +1173,18 @@ static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
     more_statements = condition_policy_to_sparql (&(node->priv->self_policy), parent, &values_offset);
     statements = g_list_concat (statements, more_statements);
 
-    parent_node = node;
+    if (node->priv->child_policy.inherit == TRUE) {
+        parent_node = node->priv->node;
 
-    while (parent_node != NULL && parent_node->priv->child_policy.inherit == TRUE) {
-        parent_node = parent_node->priv->node;
+        while (parent_node != NULL) {
+            more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
+            statements = g_list_concat (statements, more_statements);
 
-        more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
-        statements = g_list_concat (statements, more_statements);
+            if (parent_node->priv->child_policy.inherit == TRUE)
+                parent_node = parent_node->priv->node;
+            else
+                break;
+        }
     }
 
     sparql = build_sparql_query ("SELECT DISTINCT(?a)", 'a', statements);

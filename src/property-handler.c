@@ -81,6 +81,7 @@ void properties_pool_finish ()
 static gchar* name_to_uri (gchar *name)
 {
     register int i;
+    guint num;
     gchar *sep;
     const gchar *uri;
     gchar *namedup;
@@ -96,9 +97,9 @@ static gchar* name_to_uri (gchar *name)
 
     *sep = '\0';
     uri = NULL;
-    namespaces = tracker_ontology_get_namespaces ();
+    namespaces = tracker_ontology_get_namespaces (&num);
 
-    for (i = 0; namespaces [i] != NULL; i++) {
+    for (i = 0; i < num; i++) {
         if (strcmp (namedup, tracker_namespace_get_prefix (namespaces [i])) == 0) {
             uri = tracker_namespace_get_uri (namespaces [i]);
             break;
@@ -118,6 +119,9 @@ TrackerProperty* properties_pool_get_by_name (gchar *name)
     TrackerProperty *ret;
 
     uri = name_to_uri (name);
+    if (uri == NULL)
+        return NULL;
+
     ret = properties_pool_get_by_uri (uri);
     g_free (uri);
     return ret;

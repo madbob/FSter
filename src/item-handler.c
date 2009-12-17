@@ -134,6 +134,29 @@ static void item_handler_finalize (GObject *item)
         g_free (ret->priv->file_path);
 }
 
+static gchar* escape_exposed_name (const gchar *str)
+{
+    register int i;
+    register int e;
+    int len;
+    gchar *final;
+
+    len = strlen (str);
+    final = alloca (len);
+
+    for (i = 0, e = 0; i < len; i++, e++) {
+        if (str [i] == '/') {
+            final [e] = '\\';
+        }
+        else {
+            final [e] = str [i];
+        }
+    }
+
+    final [e] = '\0';
+    return g_strdup (final);
+}
+
 static void item_handler_set_property (GObject *object, guint property_id, const GValue *value, GParamSpec *pspec)
 {
     ItemHandler *self = ITEM_HANDLER (object);
@@ -160,7 +183,7 @@ static void item_handler_set_property (GObject *object, guint property_id, const
         case PROP_EXPOSED:
             if (self->priv->exposed_name != NULL)
                 g_free (self->priv->exposed_name);
-            self->priv->exposed_name = g_value_dup_string (value);
+            self->priv->exposed_name = escape_exposed_name (g_value_get_string (value));
             break;
 
         case PROP_SUBJECT:
@@ -387,10 +410,15 @@ GList* item_handler_get_children (ItemHandler *item)
  **/
 const gchar* item_handler_exposed_name (ItemHandler *item)
 {
+    gchar *name;
+
     g_return_val_if_fail (item != NULL, NULL);
 
-    if (item->priv->exposed_name == NULL)
-        item->priv->exposed_name = hierarchy_node_exposed_name_for_item (item_handler_get_logic_node (item), item);
+    if (item->priv->exposed_name == NULL) {
+        name = hierarchy_node_exposed_name_for_item (item_handler_get_logic_node (item), item);
+        g_object_set (item, "exposed_name", name, NULL);
+        g_free (name);
+    }
 
     return (const gchar*) item->priv->exposed_name;
 }

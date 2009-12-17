@@ -196,31 +196,33 @@ ItemHandler* verify_exposed_path (const gchar *path)
     if (item != NULL)
         return item;
 
-    if (strcmp (path, "/") == 0)
-        return root_item ();
-
-    if (ExposingTree == NULL) {
-        g_warning ("Warning: there is not an exposing hierarchy");
-        return NULL;
+    if (strcmp (path, "/") == 0) {
+        item = root_item ();
     }
+    else {
+        if (ExposingTree == NULL) {
+            g_warning ("Warning: there is not an exposing hierarchy");
+            return NULL;
+        }
 
-    path_tokens = tokenize_path (path);
+        path_tokens = tokenize_path (path);
 
-    item = NULL;
-    iter = NULL;
-    level = ExposingTree;
+        item = NULL;
+        iter = NULL;
+        level = ExposingTree;
 
-    for (iter = path_tokens; iter; iter = g_list_next (iter)) {
-        items = hierarchy_node_get_subchildren (level, item);
+        for (iter = path_tokens; iter; iter = g_list_next (iter)) {
+            items = hierarchy_node_get_subchildren (level, item);
 
-        item = search_exposed_name_in_list (items, (const gchar*) iter->data);
-        if (item == NULL)
-            break;
+            item = search_exposed_name_in_list (items, (const gchar*) iter->data);
+            if (item == NULL)
+                break;
 
-        level = item_handler_get_logic_node (item);
+            level = item_handler_get_logic_node (item);
+        }
+
+        easy_list_free (path_tokens);
     }
-
-    easy_list_free (path_tokens);
 
     if (item != NULL)
         nodes_cache_set_by_path (Cache, item, g_strdup (path));
