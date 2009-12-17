@@ -306,7 +306,7 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
                 token_pos++;
 
                 handled = TRUE;
-                i += 1 + offset + strlen (meta_name) + 1;
+                i += 1 + offset + strlen (meta_name) + 2;
 
             } while (0);
         }
