@@ -822,6 +822,7 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     const gchar *meta_name;
     GList *iter;
     GList *statements;
+    TrackerClass *class;
     ValuedMetadataReference *meta_ref;
     MetadataDesc *component;
 
@@ -937,6 +938,22 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                         g_free (val);
                         val = true_val;
                         break;
+
+                    /**
+                        TODO    This is probably incorrect, or may be better managed. We need to
+                                know if the value is to wrap between quotes (perhaps because it
+                                involves a subject) or not (because is a class), suggestions are
+                                welcome
+                    */
+                    case TRACKER_PROPERTY_TYPE_RESOURCE:
+                        class = tracker_property_get_range (meta_ref->metadata);
+                        if (strcmp (tracker_class_get_name (class), "rdfs:Class") != 0) {
+                            true_val = g_strdup_printf ("\"%s\"", val);
+                            g_free (val);
+                            val = true_val;
+                        }
+                        break;
+
                     default:
                         break;
                 }
