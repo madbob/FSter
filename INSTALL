@@ -1,0 +1,26 @@
+DEPENDENCIES
+-------------------------------------------------------------------------------
+In order to compile and install FSter you need:
+  - cmake >= 2.8.0
+  - fuse >= 2.8.1
+  - tracker-client >= 0.7.11
+  - libxml2 >= 2.7.4
+
+INSTALL STEPS
+-------------------------------------------------------------------------------
+The simplest way to install FSter is:
+
+mkdir build
+cd build
+cmake ..
+make
+sudo make install
+
+The script check for Tracker both in /usr and /usr/local; if you have libraries on a different
+path (perhaps using a different prefix in manual compilation and installation) you have to adjust
+your PKG_CONFIG_PATH environment variable to include the folder where tracker-client-0.7.pc is
+located (check for it with `locate`) and pass the option
+-DTRACKER_PREFIX=/the/path/used/as/prefix when invoking `cmake ..`.
+
+For details about configuration and running, please look at the wiki:
+http://gitorious.org/itsme/pages/Fster

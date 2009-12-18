@@ -36,9 +36,5 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/
     )
 
-target_link_libraries(dumpmetadata_plugin
-    ${TRACKER_LIBRARIES}
-    )
-
 install(TARGETS real_plugin DESTINATION share/fster/plugins)
 install(TARGETS dumpmetadata_plugin DESTINATION share/fster/plugins)
