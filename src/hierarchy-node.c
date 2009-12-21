@@ -1063,7 +1063,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
 
     for (iter = node->priv->expose_policy.exposed_metadata; iter; iter = g_list_next (iter)) {
         prop = (MetadataDesc*) iter->data;
-        if (prop->from == METADATA_HOLDER_SELF)
+        if (prop->from == METADATA_HOLDER_SELF && prop->means_subject == FALSE)
             create_fetching_query_statement (tracker_property_get_name (prop->metadata), &statements, &required, &var);
     }
 

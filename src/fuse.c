@@ -16,10 +16,11 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include "config.h"
 #include "core.h"
 #include "hierarchy.h"
 
-#define DEFAULT_CONFIG_FILE         "/etc/fster/fster.xml"
+#define DEFAULT_CONFIG_FILE         INSTALLDIR "/etc/fster/fster.xml"
 
 /*
     Pointers have different sizes on 32 and 64 bits architectures
@@ -744,22 +745,14 @@ static void check_configuration ()
 {
     xmlDocPtr doc;
 
-    if (Config.conf_file == NULL)
-        Config.conf_file = g_strdup (DEFAULT_CONFIG_FILE);
+    doc = xmlReadFile (Config.conf_file, NULL, XML_PARSE_NOBLANKS);
 
-    if (access (Config.conf_file, F_OK | R_OK) != 0) {
-        g_warning ("Unable to find configuration file in %s", Config.conf_file);
+    if (doc == NULL) {
+        g_warning ("Unable to read configuration");
     }
     else {
-        doc = xmlReadFile (Config.conf_file, NULL, XML_PARSE_NOBLANKS);
-
-        if (doc == NULL) {
-            g_warning ("Unable to read configuration");
-        }
-        else {
-            build_hierarchy_tree_from_xml (doc);
-            xmlFreeDoc (doc);
-        }
+        build_hierarchy_tree_from_xml (doc);
+        xmlFreeDoc (doc);
     }
 }
 
@@ -864,6 +857,15 @@ int main (int argc, char *argv [])
     memset (&Config, 0, sizeof (Config));
 
     if (fuse_opt_parse (&args, &Config, fster_opts, fster_opt_proc) == -1) {
+        free_conf ();
+        exit (1);
+    }
+
+    if (Config.conf_file == NULL)
+        Config.conf_file = g_strdup (DEFAULT_CONFIG_FILE);
+
+    if (access (Config.conf_file, F_OK | R_OK) != 0) {
+        g_warning ("Unable to find configuration file in %s", Config.conf_file);
         free_conf ();
         exit (1);
     }
