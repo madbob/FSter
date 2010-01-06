@@ -1345,6 +1345,8 @@ static gchar* collect_from_metadata_desc_list (gchar *formula, GList *components
     ItemHandler *reference;
     MetadataDesc *component;
 
+    g_assert (formula != NULL);
+
     current_offset = 1;
     components_iter = components;
     val = g_string_new ("");
@@ -1453,8 +1455,15 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
         }
     }
 
+    /*
+        Here are assigned metadata collected in the "<new_file>" section but
+        which are not set by the extraction formula
+    */
     for (iter = policy->assigned_metadata; iter; iter = g_list_next (iter)) {
         metadata_ref = (ValuedMetadataReference*) iter->data;
+
+        if (metadata_ref->get_from_extraction != 0)
+            continue;
 
         if (metadata_ref->condition_from_extraction != 0) {
             i = metadata_ref->condition_from_extraction;
@@ -1508,6 +1517,11 @@ static void assign_path (ItemHandler *item)
     node = item_handler_get_logic_node (item);
 
     if (node->priv->save_policy.hijack_folder == NULL) {
+        if (SavingPath == NULL) {
+            g_warning ("Saving path is not set, unable to save the file");
+            return;
+        }
+
         /**
             TODO    The effective saving-tree has to be used to retrieve the real path of the new
                     item, this portion has to be removed as soon as possible
@@ -1644,8 +1658,14 @@ gchar* hierarchy_node_exposed_name_for_item (HierarchyNode *node, ItemHandler *i
 */
 void hierarchy_node_set_save_path (gchar *path)
 {
+    if (strlen (path) == 0)
+        g_warning ("Invalid saving path configured");
+
     if (SavingPath != NULL)
         g_free (SavingPath);
 
-    SavingPath = g_strdup (path);
+    if (path == NULL)
+        SavingPath = NULL;
+    else
+        SavingPath = g_strdup (path);
 }

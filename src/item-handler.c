@@ -71,25 +71,39 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 {
     gboolean to_free;
     gchar *stats;
+    gchar *tys;
     gchar *query;
     va_list params;
     gpointer key;
     gpointer value;
     GList *statements;
+    GList *types;
     GHashTable *table;
     GHashTableIter iter;
     GError *error;
 
     statements = NULL;
+    types = NULL;
     va_start (params, item);
 
     while ((table = va_arg (params, GHashTable*)) != NULL) {
         to_free = va_arg (params, gboolean);
-
         g_hash_table_iter_init (&iter, table);
+
         while (g_hash_table_iter_next (&iter, &key, &value)) {
-            statements = g_list_prepend (statements, g_strdup_printf ("<%s> %s \"%s\"", item->priv->subject,
-                                                                      (gchar*) key, (gchar*) value));
+            /*
+                If the Item has some rdf:type forced, it has to be managed in
+                special way so to build the right query, where all assigned
+                types are listed before any other metadata
+            */
+            if (strcmp ((gchar*) key, "rdf:type") == 0) {
+                stats = g_strdup_printf ("<%s> a %s", item->priv->subject, (gchar*) value);
+                types = g_list_prepend (types, stats);
+            }
+            else {
+                stats = g_strdup_printf ("<%s> %s \"%s\"", item->priv->subject, (gchar*) key, (gchar*) value);
+                statements = g_list_prepend (statements, stats);
+            }
         }
 
         if (to_free == TRUE)
@@ -102,8 +116,18 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
         return;
 
     stats = from_glist_to_string (statements, " . ", TRUE);
-    query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s }",
-                             item->priv->subject, item->priv->subject, stats);
+
+    if (types == NULL) {
+        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s }",
+                                 item->priv->subject, item->priv->subject, stats);
+    }
+    else {
+        tys = from_glist_to_string (types, " . ", TRUE);
+        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s . %s }",
+                                 item->priv->subject, item->priv->subject, tys, stats);
+        g_free (tys);
+    }
+
     g_free (stats);
 
     error = NULL;
