@@ -1,3 +1,12 @@
+Itsme FSter Installation file
+Copyright (C) 2010 Itsme s.r.l
+
+This file hold the installation instruction for FSter (Guglielmo hyper file 
+system) developped by Itsme. 
+For details about configuration and running, please take a look at the wiki:
+http://gitorious.org/itsme/pages/Fster
+
+
 DEPENDENCIES
 -------------------------------------------------------------------------------
 In order to compile and install FSter you need:
@@ -6,21 +15,63 @@ In order to compile and install FSter you need:
   - tracker-client >= 0.7.11
   - libxml2 >= 2.7.4
 
-INSTALL STEPS
+
+BASIC INSTALLATION
 -------------------------------------------------------------------------------
 The simplest way to install FSter is:
 
-mkdir build
-cd build
-cmake ..
-make
-sudo make install
+1) mkdir build
 
-The script check for Tracker both in /usr and /usr/local; if you have libraries on a different
-path (perhaps using a different prefix in manual compilation and installation) you have to adjust
-your PKG_CONFIG_PATH environment variable to include the folder where tracker-client-0.7.pc is
-located (check for it with `locate`) and pass the option
--DTRACKER_PREFIX=/the/path/used/as/prefix when invoking `cmake ..`.
+Create a directory where you want to compile your software. In this case the
+newly created build directory is within the unpacked downloaded software.
 
-For details about configuration and running, please look at the wiki:
-http://gitorious.org/itsme/pages/Fster
+2) cd build
+
+3) cmake ..
+
+From within the build directory call cmake pointing to the root of the
+unpacked software.  While running cmake will check your prerequisites and 
+create the makefiles.
+
+4) make
+
+Invoke the make program to build your software.
+
+5) sudo make install
+
+This command will install executables and libraries on your system. By default
+the install will place executables and libraries under /usr/local.
+
+
+DETAILS INSTALLATION
+-------------------------------------------------------------------------------
+
+1) The build directory might have any name and placed in any convinient 
+location. In this case from the build directory you need to run cmake like
+ cmake <path/to/root/source/tree>
+
+2) installation in user specified directory.
+To install FSter in a custom location you may want to use 
+-DCMAKE_INSTALL_PREFIX="/my/target/installation" as argument for cmake
+
+
+3) Custom tracker installation
+
+Cmake will check for Tracker installation in both in /usr and /usr/local. 
+If your system has libraries on a different custom path you need to make 
+sure of the following steps:
+
+3.a) pass -DTRACKER_PREFIX=/the/path/used/as/prefix as an argument on 
+     cmake invocation
+
+3.b) Adjust your PKG_CONFIG_PATH environment variable to include the 
+     folder where tracker-client-0.7.pc is located. Run the commeand 
+     `locate` to figure out where they are.
+
+3.c) adjust your LD_LIBRARY_PATH setting to your tracker installation to
+     make sure fster will properly load them.
+
+
+-*- END OF INSTALL -*-
+
+
