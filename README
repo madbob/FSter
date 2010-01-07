@@ -1,0 +1,28 @@
+FSter - Configurable virtual filesystem for Tracker
+===============================================================================
+
+FSter is a virtual filesystem built on FUSE, able to dispose contents fetched
+from Tracker accordly to a flexible XML configuration.
+
+Documentation Wiki: http://gitorious.org/itsme/pages/Fster
+Developers' Mailing List: http://lists.itsme.it/mailman/listinfo/itsme-dev
+Bugtracker: http://bugs.itsme.it/
+
+REQUIREMENTS
+-------------------------------------------------------------------------------
+FSter depends on:
+
+  - fuse >= 2.8.1
+  - tracker-client >= 0.7.11
+  - libxml2 >= 2.7.4
+
+INSTALLATION
+-------------------------------------------------------------------------------
+See INSTALL file.
+
+COPYRIGHT AND LICENSING
+-------------------------------------------------------------------------------
+FSter is released under the terms of the GNU General Public License, version 3
+or, at your option, any later version.
+
+FSter is Copyright (C) 2009  Itsme S.r.L.
