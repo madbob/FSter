@@ -22,6 +22,7 @@
 #include "hierarchy.h"
 #include "nodes-cache.h"
 #include "utils.h"
+#include <wordexp.h>
 
 #define HIERARCHY_NODE_GET_PRIVATE(obj)     (G_TYPE_INSTANCE_GET_PRIVATE ((obj), HIERARCHY_NODE_TYPE, HierarchyNodePrivate))
 
@@ -350,6 +351,8 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
     ref = g_new0 (ValuedMetadataReference, 1);
 
     ref->metadata = properties_pool_get_by_name (str);
+    xmlFree (str);
+
     if (ref->metadata == NULL)
         return NULL;
 
@@ -385,7 +388,9 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
         value = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromextract");
 
         if (value != NULL) {
-            ref->get_from_extraction = strtoull (value, NULL, 10);
+            ref->get_from_extraction = strtoull (value, &str, 10);
+            if (*str != '\0' || ref->get_from_extraction < 1)
+                g_warning ("Error: using a non valid offset with 'valuefromextract' attribute: %s", value);
             xmlFree (value);
         }
         else {
@@ -648,6 +653,9 @@ static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposi
         }
         else if (strcmp ((gchar*) node->name, "inheritable_conditions") == 0) {
             ret = parse_conditions_policy (&(this->priv->child_policy), node);
+        }
+        else if (strcmp ((gchar*) node->name, "comment") == 0) {
+            continue;
         }
         else {
             g_warning ("Unrecognized tag %s", (gchar*) node->name);
@@ -1526,9 +1534,6 @@ static void assign_path (ItemHandler *item)
             TODO    The effective saving-tree has to be used to retrieve the real path of the new
                     item, this portion has to be removed as soon as possible
         */
-        path = g_build_filename (SavingPath, NULL);
-        check_and_create_folder (path);
-        g_free (path);
 
         path = g_build_filename (SavingPath, "XXXXXX", NULL);
 
@@ -1658,14 +1663,28 @@ gchar* hierarchy_node_exposed_name_for_item (HierarchyNode *node, ItemHandler *i
 */
 void hierarchy_node_set_save_path (gchar *path)
 {
+    wordexp_t results;
+
     if (strlen (path) == 0)
         g_warning ("Invalid saving path configured");
 
     if (SavingPath != NULL)
         g_free (SavingPath);
 
-    if (path == NULL)
+    if (path == NULL) {
         SavingPath = NULL;
-    else
-        SavingPath = g_strdup (path);
+    }
+    else {
+        wordexp (path, &results, 0);
+
+        if (results.we_wordc == 1) {
+            SavingPath = g_strdup (results.we_wordv [0]);
+            check_and_create_folder (SavingPath);
+        }
+        else {
+            g_warning ("Saving path seems to be not valid: %s", path);
+        }
+
+        wordfree (&results);
+    }
 }
