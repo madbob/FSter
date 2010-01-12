@@ -1,0 +1,371 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<!--Created with Liquid XML Studio - FREE Community Edition 7.1.6.1440 (http://www.liquid-technologies.com)-->
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="conf">
+    <xs:annotation>
+      <xs:documentation>ramo principale, contiene tutta la configurazione</xs:documentation>
+    </xs:annotation>
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="exposing_tree">
+          <xs:annotation>
+            <xs:documentation>configurazioni per la pubblicazione, indica come verranno pubblicati i dati verso il lato applicativo</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="root" type="static_folder">
+                <xs:annotation>
+                  <xs:documentation>E' l'inizio del ramo di publicazione</xs:documentation>
+                </xs:annotation>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element minOccurs="0" name="saving_tree">
+          <xs:annotation>
+            <xs:documentation>---da completare--- configurazioni per il salvataggio, indica come verranno salvati i file su FileSystem (Reale)</xs:documentation>
+          </xs:annotation>
+          <xs:complexType>
+            <xs:attribute name="base_path" use="optional">
+              <xs:annotation>
+                <xs:documentation>path di base in cui vengono salvati i file creati tramite FSter</xs:documentation>
+              </xs:annotation>
+            </xs:attribute>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+  <xs:complexType name="folder">
+    <xs:sequence>
+      <xs:element name="visualization_policy" type="folder_visualization_policy" />
+      <xs:element minOccurs="0" name="editing_policy" type="editing_policy">
+        <xs:annotation>
+          <xs:documentation>impostazione delle politiche di salvataggio</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="optional" />
+  </xs:complexType>
+  <xs:complexType name="static_folder">
+    <xs:sequence>
+      <xs:element minOccurs="1" name="visualization_policy" type="static_folder_visualization_policy" />
+      <xs:element minOccurs="0" name="editing_policy" type="editing_policy">
+        <xs:annotation>
+          <xs:documentation>impostazione delle politiche di salvataggio</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="optional" />
+  </xs:complexType>
+  <xs:complexType name="set_folder">
+    <xs:sequence>
+      <xs:element minOccurs="1" name="visualization_policy" type="static_folder_visualization_policy" />
+      <xs:element minOccurs="0" name="editing_policy" type="editing_policy">
+        <xs:annotation>
+          <xs:documentation>impostazione delle politiche di salvataggio</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="optional" />
+    <xs:attribute name="metadata" type="xs:string" use="optional" />
+  </xs:complexType>
+  <xs:complexType name="file">
+    <xs:sequence>
+      <xs:element minOccurs="1" name="visualization_policy" type="file_visualization_policy">
+        <xs:annotation>
+          <xs:documentation>definisce cosa viene mostrato, per ciascun file</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="id" type="xs:string" use="optional" />
+  </xs:complexType>
+  <xs:complexType name="editing_policy">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="inheritable_metadatas">
+        <xs:annotation>
+          <xs:documentation>metadati calcolati in base alla posizione nella struttura gerarchica ed utilizzati in fase di salvataggio</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="unbounded" name="metadata" type="metadata">
+              <xs:annotation>
+                <xs:documentation>metadato da salvare, dipendente dalla posizione in cui sto facendo il salvataggio</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+          <xs:attribute default="no" name="from_parent" type="xs:string" use="optional">
+            <xs:annotation>
+              <xs:documentation>eredita i metadati definiti nei rami superiori della gerarchia di cartelle (parent)</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" name="new_file">
+        <xs:annotation>
+          <xs:documentation>possibilità di salvare file in guglielmo</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:sequence>
+            <xs:element minOccurs="0" maxOccurs="unbounded" name="metadata" type="metadata">
+              <xs:annotation>
+                <xs:documentation>metadato da salvare dipendente dal nome del file</xs:documentation>
+              </xs:annotation>
+            </xs:element>
+          </xs:sequence>
+          <xs:attribute name="extractmetadata" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>formula per estrarre i metadati dal nome del file (regular expression posix)</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" name="new_mirror_content">
+        <xs:annotation>
+          <xs:documentation>possibilità di creare contenuto, non gestito da guglielmo</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="base_path" use="required">
+            <xs:annotation>
+              <xs:documentation>path di base del FileSystem reale, utilizzato per costruire la gerarchia di cartelle non gestite da Guglielmo</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="folder_visualization_policy">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="inheritable_conditions" type="conditions">
+        <xs:annotation>
+          <xs:documentation>condizioni per la visualizzazione del contenuto, calcolate in base alla posizione nella struttura gerarchica</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" name="self_conditions" type="conditions">
+        <xs:annotation>
+          <xs:documentation>condizioni per la visualizzazione del contenuto, calcolate in base alla posizione nella struttura gerarchica</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="name">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="name" />
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" name="content" type="folder_content">
+        <xs:annotation>
+          <xs:documentation>impostazione del contenuto da visualizzare</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="static_folder_visualization_policy">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="inheritable_conditions" type="conditions">
+        <xs:annotation>
+          <xs:documentation>condizioni per la visualizzazione del contenuto, calcolate in base alla posizione nella struttura gerarchica</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" name="name">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="name" />
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" name="content" type="folder_content">
+        <xs:annotation>
+          <xs:documentation>impostazione del contenuto da visualizzare</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="file_visualization_policy">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="self_conditions" type="conditions">
+        <xs:annotation>
+          <xs:documentation>condizioni per la visualizzazione del contenuto, calcolate in base alla posizione nella struttura gerarchica</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element name="name">
+        <xs:complexType>
+          <xs:complexContent mixed="false">
+            <xs:extension base="name" />
+          </xs:complexContent>
+        </xs:complexType>
+      </xs:element>
+      <xs:element name="content" type="file_content">
+        <xs:annotation>
+          <xs:documentation>definisce come viene recuperato/calcolato il contenuto del file</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="folder_content">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="folder" type="folder">
+        <xs:annotation>
+          <xs:documentation>aggiunge dentro la cartella corrente una cartella o una serie di cartelle, ricavate da informazioni recuperate da guglielmo</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="static_folder" type="static_folder">
+        <xs:annotation>
+          <xs:documentation>aggiunge dentro la cartella corrente una cartella statica, non ricavata da informazioni recuperate da guglielmo</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="set_folder" type="set_folder">
+        <xs:annotation>
+          <xs:documentation>aggiunge dentro la cartella corrente una cartella o una serie di cartelle derivate dal set di valori assegnati ad un metadato, in guglielmo</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="file" type="file">
+        <xs:annotation>
+          <xs:documentation>aggiunge dentro la cartella corrente un file o una serie di file, ricavati da informazioni recuperate da guglielmo</xs:documentation>
+        </xs:annotation>
+      </xs:element>
+      <xs:element minOccurs="0" maxOccurs="1" name="mirror_content">
+        <xs:annotation>
+          <xs:documentation>aggiunge alla cartella corrente cartelle del FS reale, non gestite da guglielmo</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="base_path" use="required">
+            <xs:annotation>
+              <xs:documentation>percorso base nel quale trovare le cartelle da mostrare, a questo path dovrà essere aggiuta la posizione della cartella per come la si vede da avfs</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="hidden">
+            <xs:annotation>
+              <xs:documentation>define if the content has to be shown or not</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" maxOccurs="1" name="system_folders">
+        <xs:annotation>
+          <xs:documentation>aggiunge alla cartella corrente le cartelle di sistem</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="hidden">
+            <xs:annotation>
+              <xs:documentation>define if the content has to be shown or not</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="file_content">
+    <xs:sequence>
+      <xs:element minOccurs="0" name="real_file">
+        <xs:complexType>
+          <xs:attribute name="metadata" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>metadato da cui recuperare il path su FS reale</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+      <xs:element minOccurs="0" name="dump_metadata">
+        <xs:complexType>
+          <xs:attribute name="metadata" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>metadati da estrarre</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+  </xs:complexType>
+  <xs:complexType name="name">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="derivated_value">
+        <xs:annotation>
+          <xs:documentation>valore derivato dai metadati</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="id" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>id univoco numerico del valore derivato</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="value" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>valore da impostare</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="ifmetadatavalue" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>valore del metadato da verificare</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="metadata" type="xs:string" use="required">
+            <xs:annotation>
+              <xs:documentation>metadato da controllare</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="value" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>espressione che definisce come creare il nome:
+${metadato} per inserire il valore del metadato definito
+\n_derivated_value per inserire il "valore derivato" n</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="conditions">
+    <xs:sequence>
+      <xs:element minOccurs="0" maxOccurs="unbounded" name="condition">
+        <xs:annotation>
+          <xs:documentation>Condizione da validare per definire il contenuto da visualizzare, dipendente dalla posizione in cui sto facendo il salvataggio</xs:documentation>
+        </xs:annotation>
+        <xs:complexType>
+          <xs:attribute name="metadata" type="xs:string" use="optional">
+            <xs:annotation>
+              <xs:documentation>metadato da verificare</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="value" type="xs:string" use="optional">
+            <xs:annotation>
+              <xs:documentation>valore da confrontare</xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+          <xs:attribute name="operator" type="xs:string" use="optional">
+            <xs:annotation>
+              <xs:documentation>operatore (is, isnot) </xs:documentation>
+            </xs:annotation>
+          </xs:attribute>
+        </xs:complexType>
+      </xs:element>
+    </xs:sequence>
+    <xs:attribute name="from_parent" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>eredita le condizioni definite nei rami superiori della gerarchia di cartelle (parent)</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+  <xs:complexType name="metadata">
+    <xs:attribute name="metadata" type="xs:string" use="required">
+      <xs:annotation>
+        <xs:documentation>metadato da valorizzare</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="valuefromextract" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>valore da impostare, calcolato con la funzione di estrazione dal nome dell'nodo corrente</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="value" type="xs:string">
+      <xs:annotation>
+        <xs:documentation>valore fisso da impostare</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+    <xs:attribute name="iffromextract" type="xs:string" use="optional">
+      <xs:annotation>
+        <xs:documentation>vincolo per impostare il metadato, calcolato con la funzione di estrazione dal nome dell'nodo corrente</xs:documentation>
+      </xs:annotation>
+    </xs:attribute>
+  </xs:complexType>
+</xs:schema>
