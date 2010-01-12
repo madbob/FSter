@@ -21,3 +21,4 @@
 void                easy_list_free                          (GList *list);
 gchar*              from_glist_to_string                    (GList *strings, const gchar *separator, gboolean free_list);
 void                check_and_create_folder                 (gchar *path);
+void                create_file                             (gchar *path);

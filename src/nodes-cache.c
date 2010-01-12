@@ -48,7 +48,7 @@ static void nodes_cache_init (NodesCache *cache)
 {
     cache->priv = NODES_CACHE_GET_PRIVATE (cache);
     memset (cache->priv, 0, sizeof (NodesCachePrivate));
-    cache->priv->bag = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+    cache->priv->bag = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
 }
 
 /**

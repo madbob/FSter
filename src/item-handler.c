@@ -850,6 +850,7 @@ int item_handler_readlink (ItemHandler *item, char *buf, size_t size)
         return -ENOENT;
 
     path = get_some_file_path (item);
+    memset (buf, 0, size);
     res = readlink (path, buf, size);
 
     if (res == -1)

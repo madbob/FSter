@@ -760,7 +760,7 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
                 ret = parse_exposing_policy (this, &(this->priv->expose_policy), node);
             }
             else {
-                g_warning ("Unrecognized tag in %s", this->priv->name);
+                g_warning ("Unrecognized tag %s in %s", (gchar*) node->name, this->priv->name);
                 ret = FALSE;
             }
         }
@@ -1134,7 +1134,6 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     CONTENT_TYPE type;
 
     path = NULL;
-    ret = NULL;
 
     if (parent != NULL) {
         if (item_handler_get_format (parent) == ITEM_IS_MIRROR_FOLDER)
@@ -1144,6 +1143,7 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     if (path == NULL)
         path = g_strdup (node->priv->additional_option);
 
+    ret = NULL;
     cache = get_cache_reference ();
 
     check_and_create_folder (path);
@@ -1164,11 +1164,9 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
                 type = ITEM_IS_MIRROR_ITEM;
 
             witem = g_object_new (ITEM_HANDLER_TYPE,
-                                "type", type,
-                                "parent", parent,
-                                "node", node,
-                                "file_path", item_path,
-                                "exposed_name", namelist [i]->d_name, NULL);
+                                  "type", type, "parent", parent,
+                                  "node", node, "file_path", item_path,
+                                  "exposed_name", namelist [i]->d_name, NULL);
 
             nodes_cache_set_by_path (cache, witem, item_path);
         }
@@ -1181,7 +1179,11 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     free (namelist [1]);
     free (namelist);
     g_free (path);
-    return g_list_reverse (ret);
+
+    if (ret != NULL)
+        return g_list_reverse (ret);
+    else
+        return NULL;
 }
 
 static GList* collect_children_static (HierarchyNode *node, ItemHandler *parent)
@@ -1580,9 +1582,9 @@ static void assign_path (ItemHandler *item)
         path = tmp;
 
         if (item_handler_is_folder (item))
-            mkdir (path, 0770);
+            check_and_create_folder (path);
         else
-            fclose (fopen (path, "w"));
+            create_file (path);
     }
 
     g_object_set (item, "file_path", path, NULL);
@@ -1665,7 +1667,7 @@ void hierarchy_node_set_save_path (gchar *path)
 {
     wordexp_t results;
 
-    if (strlen (path) == 0)
+    if (path != NULL && strlen (path) == 0)
         g_warning ("Invalid saving path configured");
 
     if (SavingPath != NULL)

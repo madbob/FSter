@@ -69,6 +69,7 @@ add_executable(fster ${fster_SRCS})
 target_link_libraries(fster
     fuse
     ${GIO_LIBRARIES}
+    ${GTHREAD2_LIBRARIES}
     ${DBUSGLIB_LIBRARIES}
     ${LIBXML_LIBRARIES}
     ${TRACKER_LIBRARIES}

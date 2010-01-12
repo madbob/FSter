@@ -73,3 +73,15 @@ void check_and_create_folder (gchar *path)
 
     g_object_unref (dummy);
 }
+
+void create_file (gchar *path)
+{
+    FILE *tmp;
+
+    tmp = fopen (path, "w");
+
+    if (tmp != NULL)
+        fclose (tmp);
+    else
+        g_warning ("Unable to touch new file in %s\n", path);
+}
