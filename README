@@ -2,7 +2,7 @@ FSter - Configurable virtual filesystem for Tracker
 ===============================================================================
 
 FSter is a virtual filesystem built on FUSE, able to dispose contents fetched
-from Tracker accordly to a flexible XML configuration.
+from Tracker according to a flexible XML configuration.
 
 Documentation Wiki: http://gitorious.org/itsme/pages/Fster
 Developers' Mailing List: http://lists.itsme.it/mailman/listinfo/itsme-dev
@@ -25,4 +25,4 @@ COPYRIGHT AND LICENSING
 FSter is released under the terms of the GNU General Public License, version 3
 or, at your option, any later version.
 
-FSter is Copyright (C) 2009  Itsme S.r.L.
+FSter is Copyright (C) 2010  Itsme S.r.L.
