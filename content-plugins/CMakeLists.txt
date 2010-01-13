@@ -36,5 +36,5 @@ include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/
     )
 
-install(TARGETS real_plugin DESTINATION share/fster/plugins)
-install(TARGETS dumpmetadata_plugin DESTINATION share/fster/plugins)
+install(TARGETS real_plugin DESTINATION lib/fster/plugins)
+install(TARGETS dumpmetadata_plugin DESTINATION lib/fster/plugins)

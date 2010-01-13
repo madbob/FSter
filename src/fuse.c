@@ -20,7 +20,7 @@
 #include "core.h"
 #include "hierarchy.h"
 
-#define DEFAULT_CONFIG_FILE         INSTALLDIR "/etc/fster/fster.xml"
+#define DEFAULT_CONFIG_FILE         "/etc/fster/fster.xml"
 
 /*
     Pointers have different sizes on 32 and 64 bits architectures
@@ -807,7 +807,7 @@ static struct fuse_operations ifs_oper = {
     .statfs         = ifs_statfs,
     .flush          = ifs_flush,
     .release        = ifs_release,
-    .fsync          = ifs_fsync,
+    .fsync          = ifs_fsync
 };
 
 static void usage ()
