@@ -26,6 +26,7 @@
 static GList                            *LoadedContentsPlugins      = NULL;
 static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
+static gchar                            *MountPoint                 = NULL;
 
 static void create_dummy_references ()
 {
@@ -133,6 +134,7 @@ void destroy_hierarchy_tree ()
     hierarchy_node_set_save_path (NULL);
     tracker_disconnect (get_tracker_client ());
     properties_pool_finish ();
+    g_free (MountPoint);
 }
 
 static GList* tokenize_path (const gchar *path)
@@ -305,4 +307,16 @@ TrackerClient* get_tracker_client ()
 NodesCache* get_cache_reference ()
 {
     return Cache;
+}
+
+const gchar* current_mountpoint (gchar *path)
+{
+    if (path != NULL) {
+        if (MountPoint != NULL)
+            g_free (MountPoint);
+
+        MountPoint = path;
+    }
+
+    return (const gchar*) MountPoint;
 }

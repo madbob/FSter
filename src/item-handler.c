@@ -369,7 +369,7 @@ ItemHandler* item_handler_new_alloc (CONTENT_TYPE type, HierarchyNode *node, Ite
  **/
 CONTENT_TYPE item_handler_get_format (ItemHandler *item)
 {
-    g_return_val_if_fail (item != NULL, -1);
+    g_assert (item != NULL);
     return item->priv->type;
 }
 
@@ -383,7 +383,7 @@ CONTENT_TYPE item_handler_get_format (ItemHandler *item)
  **/
 ItemHandler* item_handler_get_parent (ItemHandler *item)
 {
-    g_return_val_if_fail (item != NULL, NULL);
+    g_assert (item != NULL);
     return item->priv->parent;
 }
 
@@ -397,7 +397,7 @@ ItemHandler* item_handler_get_parent (ItemHandler *item)
  **/
 HierarchyNode* item_handler_get_logic_node (ItemHandler *item)
 {
-    g_return_val_if_fail (item != NULL, NULL);
+    g_assert (item != NULL);
     return item->priv->node;
 }
 
@@ -412,7 +412,7 @@ HierarchyNode* item_handler_get_logic_node (ItemHandler *item)
  **/
 GList* item_handler_get_children (ItemHandler *item)
 {
-    g_return_val_if_fail (item != NULL, NULL);
+    g_assert (item != NULL);
 
     if (item_handler_is_folder (item) == FALSE) {
         g_warning ("Required children for leaf item");
@@ -436,7 +436,7 @@ const gchar* item_handler_exposed_name (ItemHandler *item)
 {
     gchar *name;
 
-    g_return_val_if_fail (item != NULL, NULL);
+    g_assert (item != NULL);
 
     if (item->priv->exposed_name == NULL) {
         name = hierarchy_node_exposed_name_for_item (item_handler_get_logic_node (item), item);

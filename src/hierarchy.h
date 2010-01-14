@@ -38,5 +38,6 @@ void                replace_hierarchy_node                  (ItemHandler *old_it
 
 TrackerClient*      get_tracker_client                      ();
 NodesCache*         get_cache_reference                     ();
+const gchar*        current_mountpoint                      (gchar *path);
 
 #endif

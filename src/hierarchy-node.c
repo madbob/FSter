@@ -1150,6 +1150,9 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     n = scandir (path, &namelist, 0, alphasort);
 
     for (i = 2; i < n; i++) {
+        if (namelist [i]->d_name == NULL)
+            continue;
+
         item_path = g_build_filename (path, namelist [i]->d_name, NULL);
         witem = nodes_cache_get_by_path (cache, item_path);
 
@@ -1157,6 +1160,18 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
             g_free (item_path);
         }
         else {
+            /**
+                TODO    When FSter maps the real filesystem, it seems having some trouble
+                        stat'ing his current mountpoint. It is unclear if this is a FSter's bug,
+                        a FUSE's bug or a normal condition: waiting for further investigations,
+                        here we skip all paths matching with the current instance's mountpoint
+                        (retrieved on startup)
+            */
+            if (strcmp (item_path, current_mountpoint (NULL)) == 0) {
+                g_free (item_path);
+                continue;
+            }
+
             stat (item_path, &sbuf);
             if (S_ISDIR (sbuf.st_mode))
                 type = ITEM_IS_MIRROR_FOLDER;
@@ -1558,7 +1573,7 @@ static void assign_path (ItemHandler *item)
         tokens = NULL;
         parent = item_handler_get_parent (item);
 
-        while (item_handler_get_logic_node (parent) == node) {
+        while (parent != NULL && item_handler_get_logic_node (parent) == node) {
             tokens = g_list_prepend (tokens, (gchar*) item_handler_exposed_name (parent));
             parent = item_handler_get_parent (parent);
         }

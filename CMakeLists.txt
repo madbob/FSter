@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 2.6)
 
 project(FSter)
+set (V_MAJOR 0)
+set (V_MINOR 1)
 
 add_subdirectory(src)
 add_subdirectory(content-plugins)

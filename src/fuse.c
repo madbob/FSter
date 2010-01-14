@@ -62,13 +62,16 @@
 
 enum {
     KEY_HELP,
-    KEY_CONFIGFILE
+    KEY_CONFIGFILE,
+    KEY_VERSION
 };
 
 static struct fuse_opt fster_opts [] = {
     FUSE_OPT_KEY ("-h",         KEY_HELP),
     FUSE_OPT_KEY ("--help",     KEY_HELP),
     FUSE_OPT_KEY ("-c ",        KEY_CONFIGFILE),
+    FUSE_OPT_KEY ("-V",         KEY_VERSION),
+    FUSE_OPT_KEY ("--version",  KEY_VERSION),
     FUSE_OPT_END
 };
 
@@ -83,6 +86,7 @@ typedef struct {
 
 struct {
     gchar               *conf_file;
+    gchar               *mountpoint;
 } Config;
 
 /**
@@ -120,7 +124,25 @@ static inline OpenedItem* allocate_opened_item (ItemHandler *item, int fd)
 
 static void free_conf ()
 {
-    g_free (Config.conf_file);
+    if (Config.conf_file != NULL)
+        g_free (Config.conf_file);
+    if (Config.mountpoint != NULL)
+        g_free (Config.mountpoint);
+}
+
+static inline void set_permissions ()
+{
+    struct fuse_context *context;
+
+    /**
+        TODO    Here we try to set UID and GID of the thread without check correct capabilities:
+                if CAP_SETUID and CAP_SETGID are set it work, otherwise invocations just fail
+                with no rumors. Perhaps a check at startup can be desired...
+    */
+
+    context = fuse_get_context ();
+    setuid (context->uid);
+    setgid (context->gid);
 }
 
 /**
@@ -179,6 +201,7 @@ static int ifs_getattr (const char *path, struct stat *stbuf)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_stat (target, stbuf);
 }
@@ -195,6 +218,7 @@ static int ifs_access (const char *path, int mask)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_access (target, mask);
 }
@@ -213,6 +237,7 @@ static int ifs_readlink (const char *path, char *buf, size_t size)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_readlink (target, buf, size);
 }
@@ -242,6 +267,7 @@ static int ifs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
     ItemHandler *child;
     NodesCache *cache;
 
+    set_permissions ();
     target = verify_exposed_path (path);
 
     if (target == NULL) {
@@ -297,6 +323,7 @@ static int ifs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
 */
 static int ifs_mknod (const char *path, mode_t mode, dev_t rdev)
 {
+    set_permissions ();
     return -EACCES;
 }
 
@@ -311,6 +338,7 @@ static int ifs_mknod (const char *path, mode_t mode, dev_t rdev)
 */
 static int ifs_mkdir (const char *path, mode_t mode)
 {
+    set_permissions ();
     return create_item_by_path (path, NODE_IS_FOLDER, NULL);
 }
 
@@ -326,6 +354,7 @@ static int ifs_unlink (const char *path)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     item_handler_remove (target);
     return 0;
@@ -343,6 +372,7 @@ static int ifs_rmdir (const char *path)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
 
     if (item_handler_is_folder (target)) {
@@ -364,6 +394,8 @@ static int ifs_rmdir (const char *path)
 */
 static int ifs_symlink (const char *from, const char *to)
 {
+    set_permissions ();
+
     /**
         TODO    To be implemented
     */
@@ -385,6 +417,7 @@ static int ifs_rename (const char *from, const char *to)
     ItemHandler *start;
     ItemHandler *target;
 
+    set_permissions ();
     res = -EACCES;
 
     /*
@@ -420,6 +453,8 @@ static int ifs_rename (const char *from, const char *to)
 */
 static int ifs_link (const char *from, const char *to)
 {
+    set_permissions ();
+
     /**
         TODO    To be implemented
     */
@@ -437,6 +472,8 @@ static int ifs_link (const char *from, const char *to)
 */
 static int ifs_chmod (const char *path, mode_t mode)
 {
+    set_permissions ();
+
     /**
         TODO    To be implemented
     */
@@ -455,6 +492,8 @@ static int ifs_chmod (const char *path, mode_t mode)
 */
 static int ifs_chown (const char *path, uid_t uid, gid_t gid)
 {
+    set_permissions ();
+
     /**
         TODO    To be implemented
     */
@@ -479,6 +518,7 @@ static int ifs_ftruncate (const char *path, off_t size, struct fuse_file_info *f
     if (item == NULL)
         return -EBADF;
 
+    set_permissions ();
     ret = ftruncate (item->fd, size);
     return ret;
 }
@@ -495,6 +535,7 @@ static int ifs_truncate (const char *path, off_t size)
 {
     ItemHandler *target;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_truncate (target, size);
 }
@@ -517,6 +558,7 @@ static int ifs_utimens (const char *path, const struct timespec ts[2])
     tv [1].tv_sec = ts [1].tv_sec;
     tv [1].tv_usec = ts [1].tv_nsec / 1000;
 
+    set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_utimes (target, tv);
 }
@@ -535,6 +577,8 @@ static int ifs_open (const char *path, struct fuse_file_info *fi)
     int res;
     ItemHandler *target;
     OpenedItem *item;
+
+    set_permissions ();
 
     target = verify_exposed_path (path);
     if (target == NULL)
@@ -571,6 +615,7 @@ static int ifs_create (const char *path, mode_t mask, struct fuse_file_info *fi)
     ItemHandler *target;
     OpenedItem *item;
 
+    set_permissions ();
     res = create_item_by_path (path, NODE_IS_FILE, &target);
     if (res != 0)
         return res;
@@ -607,6 +652,7 @@ static int ifs_read (const char *path, char *buf, size_t size, off_t offset,
     if (item == NULL)
         return -EBADF;
 
+    set_permissions ();
     res = pread (item->fd, buf, size, offset);
     if (res == -1)
         res = -errno;
@@ -636,6 +682,8 @@ static int ifs_write (const char *path, const char *buf, size_t size, off_t offs
     if (item == NULL)
         return -EBADF;
 
+    set_permissions ();
+
     /*
         Remember about splice(2) for future COW implementation
     */
@@ -656,6 +704,8 @@ static int ifs_write (const char *path, const char *buf, size_t size, off_t offs
 static int ifs_statfs (const char *path, struct statvfs *stbuf)
 {
     int res;
+
+    set_permissions ();
 
     /**
         TODO    Customize data into stbuf
@@ -684,6 +734,8 @@ static int ifs_flush (const char *path, struct fuse_file_info *fi)
     if (item == NULL)
         return -EBADF;
 
+    set_permissions ();
+
     if (fsync (item->fd) != 0)
         return errno * -1;
 
@@ -706,6 +758,8 @@ static int ifs_release (const char *path, struct fuse_file_info *fi)
     FI_TO_OPENED_ITEM (fi, item);
     if (item == NULL)
         return -EBADF;
+
+    set_permissions ();
 
     if (item->item != NULL) {
         item_handler_close (item->item, item->fd);
@@ -735,6 +789,7 @@ static int ifs_fsync (const char *path, int isdatasync, struct fuse_file_info *f
     if (item == NULL)
         return -EBADF;
 
+    set_permissions ();
     return fsync (item->fd);
 }
 
@@ -825,16 +880,36 @@ static void usage ()
 
 static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
 {
+    gchar mount [PATH_MAX];
+
     switch (key) {
         case KEY_HELP:
             usage ();
             fuse_opt_add_arg (outargs, "-ho");
             fuse_main (outargs->argc, outargs->argv, &ifs_oper, NULL);
+            free_conf ();
             exit (0);
             break;
 
         case KEY_CONFIGFILE:
             Config.conf_file = g_strdup (arg + 2);
+            break;
+
+        case KEY_VERSION:
+            printf ("FSter version " FSTER_VERSION "\n");
+            exit (0);
+            break;
+
+        case FUSE_OPT_KEY_NONOPT:
+            if (realpath (arg, mount) != NULL)
+                Config.mountpoint = g_strdup (mount);
+
+            /*
+                The mount point option is anyway considered as a valid option to be passed to
+                fuse_main(), here it is catched only to be then saved and used when required
+                (cfr. collect_children_from_filesystem())
+            */
+            return 1;
             break;
 
         default:
@@ -869,6 +944,8 @@ int main (int argc, char *argv [])
         free_conf ();
         exit (1);
     }
+
+    current_mountpoint (Config.mountpoint);
 
     fuse_main (args.argc, args.argv, &ifs_oper, NULL);
     fuse_opt_free_args (&args);

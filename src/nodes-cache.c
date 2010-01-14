@@ -21,7 +21,8 @@
 #define NODES_CACHE_GET_PRIVATE(obj)       (G_TYPE_INSTANCE_GET_PRIVATE ((obj), NODES_CACHE_TYPE, NodesCachePrivate))
 
 struct _NodesCachePrivate {
-    GHashTable      *bag;
+    GHashTable          *bag;
+    pthread_spinlock_t  lock;
 };
 
 G_DEFINE_TYPE (NodesCache, nodes_cache, G_TYPE_OBJECT);
@@ -32,6 +33,7 @@ static void nodes_cache_finalize (GObject *cache)
 
     ret = NODES_CACHE (cache);
     g_hash_table_destroy (ret->priv->bag);
+    pthread_spin_destroy (&(ret->priv->lock));
 }
 
 static void nodes_cache_class_init (NodesCacheClass *klass)
@@ -49,6 +51,7 @@ static void nodes_cache_init (NodesCache *cache)
     cache->priv = NODES_CACHE_GET_PRIVATE (cache);
     memset (cache->priv, 0, sizeof (NodesCachePrivate));
     cache->priv->bag = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
+    pthread_spin_init (&(cache->priv->lock), PTHREAD_PROCESS_SHARED);
 }
 
 /**
@@ -85,7 +88,12 @@ NodesCache* nodes_cache_new ()
  **/
 ItemHandler* nodes_cache_get_by_path (NodesCache *cache, const gchar *path)
 {
-    return (ItemHandler*) g_hash_table_lookup (cache->priv->bag, path);
+    ItemHandler *ret;
+
+    pthread_spin_lock (&(cache->priv->lock));
+    ret = (ItemHandler*) g_hash_table_lookup (cache->priv->bag, path);
+    pthread_spin_unlock (&(cache->priv->lock));
+    return ret;
 }
 
 /**
@@ -101,6 +109,9 @@ ItemHandler* nodes_cache_get_by_path (NodesCache *cache, const gchar *path)
  **/
 void nodes_cache_set_by_path (NodesCache *cache, ItemHandler *item, const gchar *path)
 {
-    if (nodes_cache_get_by_path (cache, path) == NULL)
+    if (nodes_cache_get_by_path (cache, path) == NULL) {
+        pthread_spin_lock (&(cache->priv->lock));
         g_hash_table_insert (cache->priv->bag, (gchar*) path, item);
+        pthread_spin_unlock (&(cache->priv->lock));
+    }
 }
