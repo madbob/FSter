@@ -19,7 +19,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#define FSTER_VERSION   "${V_MAJOR}.${V_MINOR}"
+#define FSTER_VERSION   "${V_MAJOR}.${V_MINOR}.${V_REVISION}"
 #define INSTALLDIR      "${CMAKE_INSTALL_PREFIX}"
 
 #endif
