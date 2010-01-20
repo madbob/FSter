@@ -488,6 +488,9 @@ static gboolean parse_editing_policy (EditPolicy *saving, xmlNode *root)
                 ref = parse_reference_to_metadata ("metadata", subnode);
 
                 if (ref != NULL) {
+                    if (ref->get_from_extraction != 0 && saving->extraction_behaviour.formula == NULL)
+                        g_warning ("Defined a positional extraction policy for new files, but missing extraction formula.");
+
                     saving->extraction_behaviour.assigned_metadata = g_list_prepend (saving->extraction_behaviour.assigned_metadata, ref);
                 }
                 else {

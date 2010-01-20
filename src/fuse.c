@@ -417,7 +417,6 @@ static int ifs_rename (const char *from, const char *to)
     ItemHandler *target;
 
     set_permissions ();
-    res = -EACCES;
 
     /*
         Into the effective hierarchy, an existing item can only be moved as another valid
@@ -432,13 +431,12 @@ static int ifs_rename (const char *from, const char *to)
 
     if (target == NULL) {
         res = create_item_by_path (to, item_handler_is_folder (start) ? NODE_IS_FOLDER : NODE_IS_FILE, &target);
-    }
-    else {
-        replace_hierarchy_node (start, target);
-        res = 0;
+        if (res != 0)
+            return res;
     }
 
-    return res;
+    replace_hierarchy_node (start, target);
+    return 0;
 }
 
 /**
