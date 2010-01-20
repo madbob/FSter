@@ -24,6 +24,7 @@ CONFIGURE_FILE(
 set(fster_SRCS
     fuse.c
     utils.c
+    gfuse-loop.c
     hierarchy.c
     property-handler.c
     item-handler.c
@@ -36,6 +37,7 @@ set(fster_HEADERS
     core.h
     common.h
     utils.h
+    gfuse-loop.h
     hierarchy.h
     property-handler.h
     item-handler.h

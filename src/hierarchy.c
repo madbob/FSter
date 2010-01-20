@@ -26,7 +26,7 @@
 static GList                            *LoadedContentsPlugins      = NULL;
 static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
-static gchar                            *MountPoint                 = NULL;
+static TrackerClient                    *TrackerRef                 = NULL;
 
 static void create_dummy_references ()
 {
@@ -95,6 +95,7 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
         return;
     }
 
+    TrackerRef = tracker_connect (FALSE, G_MAXINT);
     properties_pool_init ();
     load_plugins ();
     saving_set = FALSE;
@@ -134,35 +135,24 @@ void destroy_hierarchy_tree ()
     hierarchy_node_set_save_path (NULL);
     tracker_disconnect (get_tracker_client ());
     properties_pool_finish ();
-    g_free (MountPoint);
 }
 
 static GList* tokenize_path (const gchar *path)
 {
     gchar *token;
-    gchar *tmp;
     gchar *dirs;
     GList *list;
 
     list = NULL;
-    dirs = g_strdup (path);
+    dirs = strdupa (path);
 
     for (;;) {
-        token = g_path_get_basename (dirs);
-        if (token == NULL)
+        token = basename (dirs);
+        if (token [0] == '/')
             break;
 
-        list = g_list_prepend (list, token);
-        tmp = g_path_get_dirname (dirs);
-
-        if (tmp == NULL || strcmp (tmp, "/") == 0) {
-            if (tmp != NULL)
-                g_free (tmp);
-            break;
-        }
-
-        g_free (dirs);
-        dirs = tmp;
+        list = g_list_prepend (list, g_strdup (token));
+        dirs = dirname (dirs);
     }
 
     return list;
@@ -202,11 +192,27 @@ static ItemHandler* search_exposed_name_in_list (GList *items, const gchar *sear
     return item;
 }
 
+ItemHandler* verify_exposed_path_in_folder (HierarchyNode *level, ItemHandler *root, const gchar *path) {
+    GList *children;
+    ItemHandler *ret;
+
+    if (level == NULL)
+        children = item_handler_get_children (root);
+    else
+        children = hierarchy_node_get_subchildren (level, root);
+
+    if (children == NULL)
+        return NULL;
+
+    ret = search_exposed_name_in_list (children, path);
+    g_list_free (children);
+    return ret;
+}
+
 ItemHandler* verify_exposed_path (const gchar *path)
 {
     GList *path_tokens;
     GList *iter;
-    GList *items;
     HierarchyNode *level;
     ItemHandler *item;
 
@@ -230,9 +236,7 @@ ItemHandler* verify_exposed_path (const gchar *path)
         level = ExposingTree;
 
         for (iter = path_tokens; iter; iter = g_list_next (iter)) {
-            items = hierarchy_node_get_subchildren (level, item);
-
-            item = search_exposed_name_in_list (items, (const gchar*) iter->data);
+            item = verify_exposed_path_in_folder (level, item, (const gchar*) iter->data);
             if (item == NULL)
                 break;
 
@@ -296,27 +300,10 @@ ContentsPlugin* retrieve_contents_plugin (gchar *name)
 
 TrackerClient* get_tracker_client ()
 {
-    static TrackerClient *client        = NULL;
-
-    if (client == NULL)
-        client = tracker_connect (FALSE, G_MAXINT);
-
-    return client;
+    return TrackerRef;
 }
 
 NodesCache* get_cache_reference ()
 {
     return Cache;
-}
-
-const gchar* current_mountpoint (gchar *path)
-{
-    if (path != NULL) {
-        if (MountPoint != NULL)
-            g_free (MountPoint);
-
-        MountPoint = path;
-    }
-
-    return (const gchar*) MountPoint;
 }

@@ -34,10 +34,10 @@ void                destroy_hierarchy_tree                  ();
 ContentsPlugin*     retrieve_contents_plugin                (gchar *name);
 
 ItemHandler*        verify_exposed_path                     (const gchar *path);
+ItemHandler*        verify_exposed_path_in_folder           (HierarchyNode *level, ItemHandler *root, const gchar *path);
 void                replace_hierarchy_node                  (ItemHandler *old_item, ItemHandler *new_item);
 
 TrackerClient*      get_tracker_client                      ();
 NodesCache*         get_cache_reference                     ();
-const gchar*        current_mountpoint                      (gchar *path);
 
 #endif

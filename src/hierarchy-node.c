@@ -21,6 +21,7 @@
 #include "contents-plugin.h"
 #include "hierarchy.h"
 #include "nodes-cache.h"
+#include "gfuse-loop.h"
 #include "utils.h"
 #include <wordexp.h>
 
@@ -721,6 +722,10 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
         if (strcmp (HierarchyDescription [i].tag, (gchar*) root->name) == 0) {
             this->priv->type = HierarchyDescription [i].type;
 
+            /**
+                TODO    If a "system_folders" tag is found, test for the CAP_SYS_ADMIN capability
+                        and automatically bind /proc, /dev and /tmp as internal mountpoint
+            */
             if (HierarchyDescription [i].type == ITEM_IS_MIRROR_FOLDER) {
                 /*
                     <system_folders> are managed just as <mirror_content>,
@@ -1132,22 +1137,24 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     ItemHandler *witem;
     NodesCache *cache;
     CONTENT_TYPE type;
+    GFuseLoop *loop;
 
     path = NULL;
 
     if (parent != NULL) {
         if (item_handler_get_format (parent) == ITEM_IS_MIRROR_FOLDER)
-            path = g_strdup (item_handler_real_path (parent));
+            path = strdupa (item_handler_real_path (parent));
     }
 
     if (path == NULL)
-        path = g_strdup (node->priv->additional_option);
+        path = strdupa (node->priv->additional_option);
 
     ret = NULL;
     cache = get_cache_reference ();
 
     check_and_create_folder (path);
-    n = scandir (path, &namelist, 0, alphasort);
+    n = scandir (path, &namelist, NULL, alphasort);
+    loop = gfuse_loop_get_current ();
 
     for (i = 2; i < n; i++) {
         if (namelist [i]->d_name == NULL)
@@ -1167,7 +1174,7 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
                         here we skip all paths matching with the current instance's mountpoint
                         (retrieved on startup)
             */
-            if (strcmp (item_path, current_mountpoint (NULL)) == 0) {
+            if (strcmp (item_path, gfuse_loop_get_mountpoint (loop)) == 0) {
                 g_free (item_path);
                 continue;
             }
@@ -1193,7 +1200,6 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     free (namelist [0]);
     free (namelist [1]);
     free (namelist);
-    g_free (path);
 
     if (ret != NULL)
         return g_list_reverse (ret);
@@ -1564,6 +1570,7 @@ static void assign_path (ItemHandler *item)
 
         tmp = g_filename_to_uri (path, NULL, NULL);
         g_object_set (item, "subject", tmp, NULL);
+        item_handler_load_metadata (item, "nie:isStoredAs", tmp);
         g_free (tmp);
     }
     else {
@@ -1581,10 +1588,8 @@ static void assign_path (ItemHandler *item)
         path = g_strdup (node->priv->save_policy.hijack_folder);
 
         if (tokens != NULL) {
-            tokens = g_list_reverse (tokens);
-
             for (iter = tokens; iter; iter = g_list_next (iter)) {
-                tmp = g_build_filename (path, (gchar*) tokens->data, NULL);
+                tmp = g_build_filename (path, (gchar*) iter->data, NULL);
                 g_free (path);
                 path = tmp;
             }

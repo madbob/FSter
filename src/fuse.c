@@ -19,6 +19,7 @@
 #include "config.h"
 #include "core.h"
 #include "hierarchy.h"
+#include "gfuse-loop.h"
 
 #define DEFAULT_CONFIG_FILE         "/etc/fster/fster.xml"
 
@@ -86,7 +87,6 @@ typedef struct {
 
 struct {
     gchar               *conf_file;
-    gchar               *mountpoint;
 } Config;
 
 /**
@@ -126,8 +126,6 @@ static void free_conf ()
 {
     if (Config.conf_file != NULL)
         g_free (Config.conf_file);
-    if (Config.mountpoint != NULL)
-        g_free (Config.mountpoint);
 }
 
 static inline void set_permissions ()
@@ -158,28 +156,29 @@ static int create_item_by_path (const gchar *path, NODE_TYPE type, ItemHandler *
 {
     int parent_type;
     gchar *name;
+    gchar *dir;
+    gchar *dup_path;
     ItemHandler *item;
+    ItemHandler *parent;
 
-    item = verify_exposed_path (path);
+    dup_path = strdupa (path);
+    name = basename (dup_path);
+    dir = dirname (dup_path);
+
+    parent = verify_exposed_path (dir);
+    if (parent == NULL)
+        return -ENOTDIR;
+
+    item = verify_exposed_path_in_folder (NULL, parent, name);
     if (item != NULL)
         return -EEXIST;
 
-    name = g_path_get_dirname (path);
-    item = verify_exposed_path (name);
-    g_free (name);
-
-    if (item == NULL)
-        return -ENOTDIR;
-
-    parent_type = item_handler_get_format (item);
+    parent_type = item_handler_get_format (parent);
     if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_MIRROR_FOLDER &&
             parent_type != ITEM_IS_STATIC_FOLDER && parent_type != ITEM_IS_SET_FOLDER)
         return -ENOTDIR;
 
-    name = g_path_get_basename (path);
-    item = item_handler_attach_child (item, type, name);
-    g_free (name);
-
+    item = item_handler_attach_child (parent, type, name);
     if (item == NULL)
         return -EACCES;
 
@@ -472,12 +471,11 @@ static int ifs_link (const char *from, const char *to)
 */
 static int ifs_chmod (const char *path, mode_t mode)
 {
-    set_permissions ();
+    ItemHandler *target;
 
-    /**
-        TODO    To be implemented
-    */
-    return -EACCES;
+    set_permissions ();
+    target = verify_exposed_path (path);
+    return item_handler_chmod (target, mode);
 }
 
 /**
@@ -492,35 +490,11 @@ static int ifs_chmod (const char *path, mode_t mode)
 */
 static int ifs_chown (const char *path, uid_t uid, gid_t gid)
 {
-    set_permissions ();
-
-    /**
-        TODO    To be implemented
-    */
-    return -EACCES;
-}
-
-/**
-    Truncate a file to a specified length
-
-    @param path             Path of the file to truncate
-    @param size             New size for the file
-    @param fi               Informations about the file to truncate
-
-    @return                 ftruncate()
-*/
-static int ifs_ftruncate (const char *path, off_t size, struct fuse_file_info *fi)
-{
-    int ret;
-    OpenedItem *item;
-
-    FI_TO_OPENED_ITEM (fi, item);
-    if (item == NULL)
-        return -EBADF;
+    ItemHandler *target;
 
     set_permissions ();
-    ret = ftruncate (item->fd, size);
-    return ret;
+    target = verify_exposed_path (path);
+    return item_handler_chown (target, uid, gid);
 }
 
 /**
@@ -538,6 +512,37 @@ static int ifs_truncate (const char *path, off_t size)
     set_permissions ();
     target = verify_exposed_path (path);
     return item_handler_truncate (target, size);
+}
+
+/**
+    Truncate a file to a specified length
+
+    @param path             Path of the file to truncate
+    @param size             New size for the file
+    @param fi               Informations about the file to truncate
+
+    @return                 ftruncate()
+*/
+static int ifs_ftruncate (const char *path, off_t size, struct fuse_file_info *fi)
+{
+    int ret;
+    OpenedItem *item;
+
+    FI_TO_OPENED_ITEM (fi, item);
+
+    if (item == NULL) {
+        /*
+            Just as a safety belt: if something happened to the file
+            descriptor, lets truncate the file using the path
+        */
+        ret = ifs_truncate (path, size);
+    }
+    else {
+        set_permissions ();
+        ret = ftruncate (item->fd, size);
+    }
+
+    return ret;
 }
 
 /**
@@ -620,7 +625,9 @@ static int ifs_create (const char *path, mode_t mask, struct fuse_file_info *fi)
     if (res != 0)
         return res;
 
-    res = item_handler_open (target, fi->flags);
+    res = item_handler_open (target, fi->flags & ~O_CREAT);
+    if (res == -1)
+        return -EACCES;
 
     item = allocate_opened_item (target, res);
     if (item == NULL)
@@ -648,11 +655,12 @@ static int ifs_read (const char *path, char *buf, size_t size, off_t offset,
     int res;
     OpenedItem *item;
 
+    set_permissions ();
+
     FI_TO_OPENED_ITEM (fi, item);
     if (item == NULL)
         return -EBADF;
 
-    set_permissions ();
     res = pread (item->fd, buf, size, offset);
     if (res == -1)
         res = -errno;
@@ -678,11 +686,11 @@ static int ifs_write (const char *path, const char *buf, size_t size, off_t offs
     int res;
     OpenedItem *item;
 
+    set_permissions ();
+
     FI_TO_OPENED_ITEM (fi, item);
     if (item == NULL)
         return -EBADF;
-
-    set_permissions ();
 
     /*
         Remember about splice(2) for future COW implementation
@@ -880,8 +888,6 @@ static void usage ()
 
 static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
 {
-    gchar mount [PATH_MAX];
-
     switch (key) {
         case KEY_HELP:
             usage ();
@@ -900,18 +906,6 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
             exit (0);
             break;
 
-        case FUSE_OPT_KEY_NONOPT:
-            if (realpath (arg, mount) != NULL)
-                Config.mountpoint = g_strdup (mount);
-
-            /*
-                The mount point option is anyway considered as a valid option to be passed to
-                fuse_main(), here it is catched only to be then saved and used when required
-                (cfr. collect_children_from_filesystem())
-            */
-            return 1;
-            break;
-
         default:
             return 1;
             break;
@@ -925,10 +919,14 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
 */
 int main (int argc, char *argv [])
 {
+    GFuseLoop *loop;
     struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
 
     umask (0);
     g_type_init ();
+    g_thread_init (NULL);
+    dbus_g_thread_init ();
+
     memset (&Config, 0, sizeof (Config));
 
     if (fuse_opt_parse (&args, &Config, fster_opts, fster_opt_proc) == -1) {
@@ -945,9 +943,12 @@ int main (int argc, char *argv [])
         exit (1);
     }
 
-    current_mountpoint (Config.mountpoint);
+    loop = gfuse_loop_new ();
+    gfuse_loop_set_operations (loop, &ifs_oper);
+    gfuse_loop_set_config (loop, args.argc, args.argv);
+    gfuse_loop_run (loop);
 
-    fuse_main (args.argc, args.argv, &ifs_oper, NULL);
+    g_main_loop_run (g_main_loop_new (NULL, FALSE));
     fuse_opt_free_args (&args);
     exit (0);
 }

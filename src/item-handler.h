@@ -84,6 +84,8 @@ int             item_handler_open               (ItemHandler *item, int flags);
 void            item_handler_close              (ItemHandler *item, int fd);
 int             item_handler_stat               (ItemHandler *item, struct stat *sbuf);
 int             item_handler_access             (ItemHandler *item, int mask);
+int             item_handler_chmod              (ItemHandler *item, mode_t mode);
+int             item_handler_chown              (ItemHandler *item, uid_t uid, gid_t gid);
 int             item_handler_readlink           (ItemHandler *item, char *buf, size_t size);
 int             item_handler_truncate           (ItemHandler *item, off_t size);
 int             item_handler_utimes             (ItemHandler *item, struct timeval tv [2]);

@@ -29,6 +29,7 @@
 #include <unistd.h>
 #include <regex.h>
 #include <dirent.h>
+#include <libgen.h>
 #include <pthread.h>
 #include <errno.h>
 #include <dlfcn.h>

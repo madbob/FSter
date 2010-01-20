@@ -434,14 +434,22 @@ GList* item_handler_get_children (ItemHandler *item)
  **/
 const gchar* item_handler_exposed_name (ItemHandler *item)
 {
+    int format;
     gchar *name;
 
     g_assert (item != NULL);
 
     if (item->priv->exposed_name == NULL) {
-        name = hierarchy_node_exposed_name_for_item (item_handler_get_logic_node (item), item);
-        g_object_set (item, "exposed_name", name, NULL);
-        g_free (name);
+        format = item_handler_get_format (item);
+
+        if (format != ITEM_IS_VIRTUAL_ITEM && format != ITEM_IS_VIRTUAL_FOLDER) {
+            g_warning ("Non-virtual item has no exposed name");
+        }
+        else {
+            name = hierarchy_node_exposed_name_for_item (item_handler_get_logic_node (item), item);
+            g_object_set (item, "exposed_name", name, NULL);
+            g_free (name);
+        }
     }
 
     return (const gchar*) item->priv->exposed_name;
@@ -542,13 +550,19 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
 {
     const gchar *ret;
 
+    g_assert (item != NULL);
+    g_assert (metadata != NULL);
+
     if (HAS_NOT_META (item_handler_get_format (item))) {
         g_warning ("Attempt to access metadata in non-semantic hierarchy node");
         return NULL;
     }
 
+    ret = NULL;
+
     if (g_hash_table_lookup_extended (item->priv->metadata, metadata, NULL, (gpointer*) &ret) == FALSE)
-        ret = fetch_metadata (item, metadata);
+        if (g_hash_table_lookup_extended (item->priv->tosave, metadata, NULL, (gpointer*) &ret) == FALSE)
+            ret = fetch_metadata (item, metadata);
 
     return ret;
 }
@@ -823,6 +837,62 @@ int item_handler_access (ItemHandler *item, int mask)
 
     path = get_some_file_path (item);
     res = access (path, mask);
+
+    if (res == -1)
+        return -errno;
+    else
+        return 0;
+}
+
+/**
+ * item_handler_chmod:
+ * @item: an #ItemHandler
+ * @mode: new permissions mask for the item
+ *
+ * To change permissions of a file wrapped by the specified #ItemHandler
+ *
+ * Return value: 0 if the required permissions mask matches with effective
+ * permissions, or a negative value holding the relative errno
+ **/
+int item_handler_chmod (ItemHandler *item, mode_t mode)
+{
+    int res;
+    const gchar *path;
+
+    if (item == NULL)
+        return -ENOENT;
+
+    path = get_some_file_path (item);
+    res = chmod (path, mode);
+
+    if (res == -1)
+        return -errno;
+    else
+        return 0;
+}
+
+/**
+ * item_handler_chown:
+ * @item: an #ItemHandler
+ * @uid: new user owner of the file
+ * @gid: new group owner of the file
+ *
+ * To change user and gorup owners of a file wrapped by the specified
+ * #ItemHandler
+ *
+ * Return value: 0 if the required permissions mask matches with effective
+ * permissions, or a negative value holding the relative errno
+ **/
+int item_handler_chown (ItemHandler *item, uid_t uid, gid_t gid)
+{
+    int res;
+    const gchar *path;
+
+    if (item == NULL)
+        return -ENOENT;
+
+    path = get_some_file_path (item);
+    res = chown (path, uid, gid);
 
     if (res == -1)
         return -errno;
