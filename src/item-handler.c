@@ -30,6 +30,8 @@
                                              __type == ITEM_IS_MIRROR_ITEM ||   \
                                              __type == ITEM_IS_MIRROR_FOLDER)
 
+#define IS_MIRROR(__type)                   (__type == ITEM_IS_MIRROR_ITEM || __type == ITEM_IS_MIRROR_FOLDER)
+
 struct _ItemHandlerPrivate {
     CONTENT_TYPE    type;
 
@@ -804,9 +806,10 @@ int item_handler_stat (ItemHandler *item, struct stat *sbuf)
     res = lstat (path, sbuf);
 
     /*
-        This is to force items listed under a <folder> node to appear as browseable folders
+        This is to force items listed under a <folder> node to appear as browseable folders.
+        For "mirror" items, we just get the original stat() result
     */
-    if (item_handler_is_folder (item)) {
+    if (IS_MIRROR (item_handler_get_format (item)) == FALSE && item_handler_is_folder (item)) {
         sbuf->st_mode &= !(S_IFREG);
         sbuf->st_mode |= S_IFDIR;
     }
