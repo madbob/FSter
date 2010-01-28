@@ -78,4 +78,5 @@ target_link_libraries(fster
     ${TRACKER_CLIENT_LIBRARIES}
     )
 
-install(TARGETS fster DESTINATION bin)
+INSTALL(TARGETS fster DESTINATION bin)
+INSTALL(CODE "EXEC_PROGRAM(setcap ARGS \\\"cap_setuid+iep cap_setgid+iep cap_sys_admin+iep\\\" ${CMAKE_INSTALL_PREFIX}/bin/fster)")
