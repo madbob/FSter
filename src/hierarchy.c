@@ -252,6 +252,53 @@ ItemHandler* verify_exposed_path (const gchar *path)
     return item;
 }
 
+HierarchyNode* node_at_path (const gchar *path)
+{
+    GList *path_tokens;
+    GList *iter;
+    HierarchyNode *level;
+    ItemHandler *item;
+
+    item = nodes_cache_get_by_path (Cache, path);
+    if (item != NULL)
+        return item_handler_get_logic_node (item);
+
+    if (strcmp (path, "/") == 0) {
+        level = ExposingTree;
+    }
+    else {
+        if (ExposingTree == NULL) {
+            g_warning ("Warning: there is not an exposing hierarchy");
+            return NULL;
+        }
+
+        path_tokens = tokenize_path (path);
+
+        item = NULL;
+        iter = NULL;
+        level = ExposingTree;
+
+        for (iter = path_tokens; iter; iter = g_list_next (iter)) {
+            item = verify_exposed_path_in_folder (level, item, (const gchar*) iter->data);
+            if (item == NULL)
+                break;
+
+            level = item_handler_get_logic_node (item);
+
+            /*
+                This is because hierarchy into a <mirror_content> is only the
+                <mirror_content> itself, so we can avoid go deeper
+            */
+            if (hierarchy_node_get_format (level) == ITEM_IS_MIRROR_FOLDER)
+                break;
+        }
+
+        easy_list_free (path_tokens);
+    }
+
+    return level;
+}
+
 void replace_hierarchy_node (ItemHandler *old_item, ItemHandler *new_item)
 {
     int first;

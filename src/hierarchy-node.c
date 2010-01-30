@@ -1354,6 +1354,29 @@ GList* hierarchy_node_get_subchildren (HierarchyNode *node, ItemHandler *parent)
 }
 
 /**
+ * hierarchy_node_get_mirror_path:
+ * @node: a #HierarchyNode
+ *
+ * To be used for %ITEM_IS_MIRROR_FOLDER and %ITEM_IS_MIRROR_ITEM nodes,
+ * returns the path which is mapped by the @node
+ *
+ * Return value: the mapped path on the real filesystem, or NULL if the node
+ * don't maps any path
+ */
+const gchar* hierarchy_node_get_mirror_path (HierarchyNode *node)
+{
+    CONTENT_TYPE type;
+
+    type = hierarchy_node_get_format (node);
+    if (type != ITEM_IS_MIRROR_FOLDER && type != ITEM_IS_MIRROR_ITEM) {
+        g_warning ("Request for mirror path in non mirror node");
+        return NULL;
+    }
+
+    return node->priv->additional_option;
+}
+
+/**
  * hierarchy_node_hide_contents:
  * @node: a #HierarchyNode
  *

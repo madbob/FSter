@@ -21,6 +21,9 @@
 #include "hierarchy.h"
 #include "gfuse-loop.h"
 
+/**
+    TODO    Better path for configuration file, based on prefix and sysconfdir
+*/
 #define DEFAULT_CONFIG_FILE         "/etc/fster/fster.xml"
 
 /*
@@ -413,8 +416,11 @@ static int ifs_symlink (const char *from, const char *to)
 static int ifs_rename (const char *from, const char *to)
 {
     int res;
+    CONTENT_TYPE start_type;
     ItemHandler *start;
     ItemHandler *target;
+    HierarchyNode *start_level;
+    HierarchyNode *target_level;
 
     set_permissions ();
 
@@ -426,6 +432,28 @@ static int ifs_rename (const char *from, const char *to)
     start = verify_exposed_path (from);
     if (start == NULL)
         return -ENOENT;
+
+    /*
+        If both paths, origin and destination, refer to something into a mirror folder, so are
+        just maps to the real filesystem, a normal rename() is called so to avoid many (useless)
+        handling
+    */
+    start_type = item_handler_get_format (start);
+    if ((start_type == ITEM_IS_MIRROR_ITEM || start_type == ITEM_IS_MIRROR_FOLDER)) {
+        start_level = item_handler_get_logic_node (start);
+        /**
+            TODO    Actually this works only for "system_folders" nodes, provide to correct so to
+                    be correct also for the "mirror_contents" case
+        */
+        if (strcmp (hierarchy_node_get_mirror_path (start_level), "/") == 0) {
+            target_level = node_at_path (to);
+            if (target_level == item_handler_get_logic_node (start)) {
+                res = rename (from, to);
+                if (res != 0)
+                    return -errno;
+            }
+        }
+    }
 
     target = verify_exposed_path (to);
 
@@ -835,6 +863,7 @@ static void* ifs_init (struct fuse_conn_info *conn)
 */
 static void ifs_destroy (void *conn)
 {
+    g_main_loop_quit (g_main_loop_new (NULL, FALSE));
     destroy_hierarchy_tree ();
     free_conf ();
 }
@@ -869,6 +898,12 @@ static struct fuse_operations ifs_oper = {
     .flush          = ifs_flush,
     .release        = ifs_release,
     .fsync          = ifs_fsync
+
+    /**
+        TODO    Add .ioctl() handler, and add support for BTRFS_IOC_CLONE (copy-on-write ioctl)
+                http://sourceforge.net/mailarchive/forum.php?thread_name=87mxzzinek.fsf%40inspiron.ap.columbia.edu&forum_name=fuse-devel
+                http://git.savannah.gnu.org/gitweb/?p=coreutils.git;a=blob;f=src/copy.c;h=80ec3625e11ba99b3239a474494e087282b2908e;hb=HEAD
+    */
 };
 
 static void usage ()

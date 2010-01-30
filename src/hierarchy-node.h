@@ -58,6 +58,8 @@ CONTENT_TYPE    hierarchy_node_get_format                   (HierarchyNode *node
 
 GList*          hierarchy_node_get_children                 (HierarchyNode *node, ItemHandler *parent);
 GList*          hierarchy_node_get_subchildren              (HierarchyNode *node, ItemHandler *parent);
+
+const gchar*    hierarchy_node_get_mirror_path              (HierarchyNode *node);
 gboolean        hierarchy_node_hide_contents                (HierarchyNode *node);
 
 ItemHandler*    hierarchy_node_add_item                     (HierarchyNode *node, NODE_TYPE type, ItemHandler *parent, const gchar *name);
