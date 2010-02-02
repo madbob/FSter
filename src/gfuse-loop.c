@@ -39,6 +39,7 @@ struct _GFuseLoopPrivate {
     struct fuse_operations  *shadow_ops;
     PrivateDataBlock        *runtime_data;
     gchar                   *mountpoint;
+    gboolean                threads;
 
     GIOChannel              *fuse_fd;
 };
@@ -312,6 +313,7 @@ void gfuse_loop_run (GFuseLoop *loop)
                                loop->priv->shadow_ops, sizeof (struct fuse_operations),
                                &loop->priv->mountpoint, &thread, loop->priv->runtime_data);
 
+    loop->priv->threads = (thread != 0);
     se = fuse_get_session (fuse_session);
     ch = fuse_session_next_chan (se, NULL);
     loop->priv->fuse_fd = g_io_channel_unix_new (fuse_chan_fd (ch));

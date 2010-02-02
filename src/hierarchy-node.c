@@ -49,7 +49,7 @@ typedef struct {
 } MetadataDesc;
 
 typedef struct {
-    TrackerProperty     *metadata;
+    MetadataDesc        metadata;
     gchar               *formula;
     GList               *involved;                  // list of MetadataDesc
     gchar               *comparison_value;
@@ -122,8 +122,6 @@ G_DEFINE_TYPE (HierarchyNode, hierarchy_node, G_TYPE_OBJECT);
 static void free_metadata_reference (ValuedMetadataReference *ref)
 {
     GList *iter;
-
-    g_object_unref (ref->metadata);
 
     for (iter = ref->involved; iter; iter = g_list_next (iter))
         g_free (iter->data);
@@ -351,11 +349,18 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
 
     ref = g_new0 (ValuedMetadataReference, 1);
 
-    ref->metadata = properties_pool_get_by_name (str);
-    xmlFree (str);
+    if (strcmp (str, "/subject") == 0) {
+        ref->metadata.means_subject = TRUE;
+    }
+    else {
+        ref->metadata.metadata = properties_pool_get_by_name (str);
+        if (ref->metadata.metadata == NULL) {
+            xmlFree (str);
+            return NULL;
+        }
+    }
 
-    if (ref->metadata == NULL)
-        return NULL;
+    xmlFree (str);
 
     str = (gchar*) xmlGetProp (node, (xmlChar*) "operator");
     if (str != NULL) {
@@ -386,18 +391,24 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
     value = (gchar*) xmlGetProp (node, (xmlChar*) "value");
 
     if (value == NULL) {
-        value = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromextract");
-
-        if (value != NULL) {
-            ref->get_from_extraction = strtoull (value, &str, 10);
-            if (*str != '\0' || ref->get_from_extraction < 1)
-                g_warning ("Error: using a non valid offset with 'valuefromextract' attribute: %s", value);
-            xmlFree (value);
+        if (ref->metadata.means_subject == TRUE) {
+            g_warning ("A %s with \"metadata = subject\" may only match a given \"value\".", tag);
+            ref = NULL;
         }
         else {
-            g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
-            free_metadata_reference (ref);
-            ref = NULL;
+            value = (gchar*) xmlGetProp (node, (xmlChar*) "valuefromextract");
+
+            if (value != NULL) {
+                ref->get_from_extraction = strtoull (value, &str, 10);
+                if (*str != '\0' || ref->get_from_extraction < 1)
+                    g_warning ("Error: using a non valid offset with 'valuefromextract' attribute: %s", value);
+                xmlFree (value);
+            }
+            else {
+                g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
+                free_metadata_reference (ref);
+                ref = NULL;
+            }
         }
     }
     else {
@@ -817,15 +828,48 @@ CONTENT_TYPE hierarchy_node_get_format (HierarchyNode *node)
     return node->priv->type;
 }
 
-static gchar* compose_value_from_many_metadata (GList *metadata, gchar *formula)
+static gchar* compose_value_from_many_metadata (ItemHandler *parent, GList *metadata, gchar *formula)
 {
-    /**
-        TODO    Here we have to support concatenation of different objects to match a single one.
-                The main problem is to write a SPARQL query able to apply concatenation in place
-    */
+	int pos;
+	gchar *iter;
+	gchar *check;
+	GString *str;
+	MetadataDesc *met;
 
-    g_warning ("Metadata concatenation not yet supported");
-    return NULL;
+	if (g_list_length (metadata) > 1) {
+		g_warning ("Metadata concatenation not yet supported");
+		return NULL;
+	}
+
+	str = g_string_new ("");
+
+	/**
+		TODO	This actually works only for one-element list, and only if a metadata or the
+				subject of the parent is required
+	*/
+
+	for (iter = formula; *iter != '\0'; iter++) {
+		if (*iter == '\\' && (pos = strtoull (iter + 1, &check, 10)) && check != (iter + 1)) {
+			met = (MetadataDesc*) metadata->data;
+
+			if (met->from == METADATA_HOLDER_PARENT) {
+				if (met->means_subject == TRUE)
+					g_string_append_printf (str, "%s", item_handler_get_subject (parent));
+				else
+					g_string_append_printf (str, "%s", item_handler_get_metadata (parent, tracker_property_get_name (met->metadata)));
+			}
+			else {
+				g_warning ("Metadata concatenation not yet supported");
+			}
+
+			iter++;
+		}
+		else {
+			g_string_append_c (str, *iter);
+		}
+	}
+
+    return g_string_free (str, FALSE);
 }
 
 static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *parent, int *offset)
@@ -845,6 +889,10 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     statements = NULL;
     value_offset = *offset;
 
+    /*
+        Welcome to the hell...
+    */
+
     for (iter = policy->conditions; iter; iter = g_list_next (iter)) {
         meta_ref = (ValuedMetadataReference*) iter->data;
         stat = NULL;
@@ -861,27 +909,58 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
 
             if (component->from == METADATA_HOLDER_SELF) {
                 if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                    if (component->means_subject == TRUE) {
-                        stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (meta_ref->metadata));
+                    if (meta_ref->metadata.means_subject == TRUE) {
+                        if (component->means_subject == TRUE) {
+                            /*
+                                Tautology; the subject of the item is equal to the subject of the
+                                same item. We can avoid to set this in the final query
+                            */
+                            stat = NULL;
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (component->metadata));
+                        }
                     }
-                    else {
-                        stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d",
-                                                tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                tracker_property_get_name (component->metadata), value_offset);
-                        value_offset++;
+                    else if (meta_ref->metadata.means_subject == FALSE) {
+                        if (component->means_subject == TRUE) {
+                            stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (meta_ref->metadata.metadata));
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d",
+                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                    tracker_property_get_name (component->metadata), value_offset);
+                            value_offset++;
+                        }
                     }
                 }
-                else {
-                    if (component->means_subject == TRUE) {
-                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = ?item ) )",
-                                                tracker_property_get_name (meta_ref->metadata), value_offset, value_offset);
+                else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL) {
+                    if (meta_ref->metadata.means_subject == TRUE) {
+                        if (component->means_subject == TRUE) {
+                            /**
+                                TODO    If here, the whole query rappresents an empty set due it
+                                        is required that the subject is not equal to the subject
+                                        himself (impossible). Free the whole collected statements
+                                        and return NULL
+                            */
+                            stat = NULL;
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
+                                                    tracker_property_get_name (component->metadata), value_offset, value_offset);
+                        }
                     }
-                    else {
-                        stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
-                                                tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                tracker_property_get_name (component->metadata), value_offset + 1,
-                                                value_offset, value_offset + 1);
-                        value_offset += 2;
+                    else if (meta_ref->metadata.means_subject == FALSE) {
+                        if (component->means_subject == TRUE) {
+                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
+                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset, value_offset);
+                        }
+                        else {
+                            stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( ?var%d != ?var%d )",
+                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                    tracker_property_get_name (component->metadata), value_offset + 1,
+                                                    value_offset, value_offset + 1);
+                            value_offset += 2;
+                        }
                     }
                 }
             }
@@ -891,47 +970,78 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
 
                 if (parent != NULL) {
                     if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                        if (component->means_subject == TRUE) {
-                            stat = g_strdup_printf ("?item %s \"%s\"",
-                                                    tracker_property_get_name (meta_ref->metadata), item_handler_get_subject (parent));
-                        }
-                        else {
-                            meta_name = tracker_property_get_name (component->metadata);
-
-                            if (item_handler_contains_metadata (parent, meta_name)) {
-                                stat = g_strdup_printf ("?item %s \"%s\"",
-                                                        tracker_property_get_name (meta_ref->metadata),
-                                                        item_handler_get_metadata (parent, meta_name));
+                        if (meta_ref->metadata.means_subject == TRUE) {
+                            if (component->means_subject == TRUE) {
+                                /**
+                                    TODO    How to write a SPARQL query to match a given subject?
+                                */
+                                stat = NULL;
                             }
                             else {
-                                stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
-                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                        item_handler_get_subject (parent), meta_name, value_offset);
-                                value_offset++;
+                                stat = g_strdup_printf ("?item %s \"%s\"",
+                                                        tracker_property_get_name (component->metadata),
+                                                        item_handler_get_subject (parent));
+                            }
+                        }
+                        else if (meta_ref->metadata.means_subject == FALSE) {
+                            if (component->means_subject == TRUE) {
+                                stat = g_strdup_printf ("?item %s \"%s\"",
+                                                        tracker_property_get_name (meta_ref->metadata.metadata),
+                                                        item_handler_get_subject (parent));
+                            }
+                            else {
+                                meta_name = tracker_property_get_name (component->metadata);
+
+                                if (item_handler_contains_metadata (parent, meta_name)) {
+                                    stat = g_strdup_printf ("?item %s \"%s\"",
+                                                            tracker_property_get_name (meta_ref->metadata.metadata),
+                                                            item_handler_get_metadata (parent, meta_name));
+                                }
+                                else {
+                                    stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
+                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            item_handler_get_subject (parent), meta_name, value_offset);
+                                    value_offset++;
+                                }
                             }
                         }
                     }
-                    else {
-                        if (component->means_subject == TRUE) {
-                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = \"%s\" ) )",
-                                                    tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                    value_offset, item_handler_get_subject (parent));
-                        }
-                        else {
-                            meta_name = tracker_property_get_name (component->metadata);
-
-                            if (item_handler_contains_metadata (parent, meta_name)) {
-                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = \"%s\" ) )",
-                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                        value_offset, item_handler_get_metadata (parent, meta_name));
-                                value_offset++;
+                    else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL) {
+                        if (meta_ref->metadata.means_subject == TRUE) {
+                            if (component->means_subject == TRUE) {
+                                /**
+                                    TODO    How to write a SPARQL query to match a given subject?
+                                */
+                                stat = NULL;
                             }
                             else {
-                                stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( !( ?var%d = ?var%d ) )",
-                                                        tracker_property_get_name (meta_ref->metadata), value_offset,
-                                                        item_handler_get_subject (parent), meta_name, value_offset + 1,
-                                                        value_offset, value_offset + 1);
-                                value_offset += 2;
+                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                                        tracker_property_get_name (component->metadata), value_offset,
+                                                        value_offset, item_handler_get_subject (parent));
+                            }
+                        }
+                        else {
+                            if (component->means_subject == TRUE) {
+                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                                        tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                        value_offset, item_handler_get_subject (parent));
+                            }
+                            else {
+                                meta_name = tracker_property_get_name (component->metadata);
+
+                                if (item_handler_contains_metadata (parent, meta_name)) {
+                                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            value_offset, item_handler_get_metadata (parent, meta_name));
+                                    value_offset++;
+                                }
+                                else {
+                                    stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( ?var%d != ?var%d )",
+                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            item_handler_get_subject (parent), meta_name, value_offset + 1,
+                                                            value_offset, value_offset + 1);
+                                    value_offset += 2;
+                                }
                             }
                         }
                     }
@@ -945,42 +1055,52 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
             if (involved_num == 0)
                 val = g_strdup (meta_ref->formula);
             else
-                val = compose_value_from_many_metadata (meta_ref->involved, meta_ref->formula);
+                val = compose_value_from_many_metadata (parent, meta_ref->involved, meta_ref->formula);
 
             if (val != NULL) {
-                switch (tracker_property_get_data_type (meta_ref->metadata)) {
-                    case TRACKER_PROPERTY_TYPE_STRING:
-                        true_val = g_strdup_printf ("\"%s\"", val);
-                        g_free (val);
-                        val = true_val;
-                        break;
-
-                    /**
-                        TODO    This is probably incorrect, or may be better managed. We need to
-                                know if the value is to wrap between quotes (perhaps because it
-                                involves a subject) or not (because is a class), suggestions are
-                                welcome
-                    */
-                    case TRACKER_PROPERTY_TYPE_RESOURCE:
-                        class = tracker_property_get_range (meta_ref->metadata);
-                        if (strcmp (tracker_class_get_name (class), "rdfs:Class") != 0) {
+                if (meta_ref->metadata.means_subject == TRUE) {
+                    if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
+                        stat = g_strdup_printf ("?item a rdfs:Resource filter (?subject = <%s>)", val);
+                    }
+                    else {
+                        stat = g_strdup_printf ("?item a rdfs:Resource filter (?subject != <%s>)", val);
+                    }
+                }
+                else {
+                    switch (tracker_property_get_data_type (meta_ref->metadata.metadata)) {
+                        case TRACKER_PROPERTY_TYPE_STRING:
                             true_val = g_strdup_printf ("\"%s\"", val);
                             g_free (val);
                             val = true_val;
-                        }
-                        break;
+                            break;
 
-                    default:
-                        break;
-                }
+                        /**
+                            TODO    This is probably incorrect, or may be better managed. We need to
+                                    know if the value is to wrap between quotes (perhaps because it
+                                    involves a subject) or not (because is a class), suggestions are
+                                    welcome
+                        */
+                        case TRACKER_PROPERTY_TYPE_RESOURCE:
+                            class = tracker_property_get_range (meta_ref->metadata.metadata);
+                            if (strcmp (tracker_class_get_name (class), "rdfs:Class") != 0) {
+                                true_val = g_strdup_printf ("\"%s\"", val);
+                                g_free (val);
+                                val = true_val;
+                            }
+                            break;
 
-                if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                    stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata), val);
-                }
-                else {
-                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( !( ?var%d = %s ) )",
-                                            tracker_property_get_name (meta_ref->metadata), value_offset, value_offset, val);
-                    value_offset++;
+                        default:
+                            break;
+                    }
+
+                    if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
+                        stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata.metadata), val);
+                    }
+                    else {
+                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != %s )",
+                                                tracker_property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, val);
+                        value_offset++;
+                    }
                 }
 
                 g_free (val);
@@ -1085,7 +1205,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
 
     for (iter = node->priv->expose_policy.conditional_metadata; iter; iter = g_list_next (iter)) {
         meta_ref = (ValuedMetadataReference*) iter->data;
-        create_fetching_query_statement (tracker_property_get_name (meta_ref->metadata), &statements, &required, &var);
+        create_fetching_query_statement (tracker_property_get_name (meta_ref->metadata.metadata), &statements, &required, &var);
     }
 
     values_offset = 0;
@@ -1495,7 +1615,7 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
                     metadata_ref = (ValuedMetadataReference*) iter->data;
 
                     if (metadata_ref->get_from_extraction == i) {
-                        item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata), str);
+                        item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata.metadata), str);
                         metadata_set = TRUE;
 
                         /*
@@ -1530,7 +1650,7 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
 
         str = collect_from_metadata_desc_list (metadata_ref->formula, metadata_ref->involved, item, parent);
         if (str != NULL) {
-            item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata), str);
+            item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata.metadata), str);
             g_free (str);
         }
     }
@@ -1552,7 +1672,7 @@ static void inherit_metadata (HierarchyNode *node, ItemHandler *item, ItemHandle
 
         val = collect_from_metadata_desc_list (metadata->formula, metadata->involved, item, parent);
         if (val != NULL) {
-            item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata), val);
+            item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata.metadata), val);
             g_free (val);
         }
     }

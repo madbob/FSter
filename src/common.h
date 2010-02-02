@@ -33,6 +33,7 @@
 #include <pthread.h>
 #include <errno.h>
 #include <dlfcn.h>
+#include <ctype.h>
 #include <attr/xattr.h>
 #include <sys/time.h>
 #include <sys/stat.h>
