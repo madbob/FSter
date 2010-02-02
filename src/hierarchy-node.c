@@ -1794,9 +1794,13 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
         new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_VIRTUAL_FOLDER : ITEM_IS_VIRTUAL_ITEM, node, parent);
         g_object_set (new_item, "exposed_name", newname, NULL);
 
+        /*
+            Path is assigned before inherited metadata to permit recall nie:isStoredAs
+        */
+        assign_path (new_item);
+
         retrieve_metadata_by_name (node, new_item, parent, newname);
         inherit_metadata (node, new_item, parent);
-        assign_path (new_item);
         item_handler_flush (new_item);
     }
     else {
