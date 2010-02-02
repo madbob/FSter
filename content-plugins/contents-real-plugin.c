@@ -28,10 +28,17 @@ static const gchar* contents_real_plugin_get_name (ContentsPlugin *self)
 static gchar* contents_real_plugin_get_file (ContentsPlugin *self, ItemHandler *item)
 {
     gchar *path;
+    const gchar *meta;
 
-    path = (gchar*) item_handler_get_metadata (item, "nie:isStoredAs");
-    if (path != NULL)
-        path = g_filename_from_uri (path, NULL, NULL);
+    meta = contents_plugin_get_metadata (self);
+    if (meta == NULL)
+        meta = "nie:isStoredAs";
+
+    path = (gchar*) item_handler_get_metadata (item, meta);
+    if (path != NULL) {
+        if (strncmp (path, "file://", 7) == 0)
+            path = g_filename_from_uri (path, NULL, NULL);
+    }
 
     return path;
 }

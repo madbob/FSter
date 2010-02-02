@@ -18,14 +18,35 @@
 
 #include "contents-plugin.h"
 
+#define CONTENTS_PLUGIN_GET_PRIVATE(obj)    (G_TYPE_INSTANCE_GET_PRIVATE ((obj), CONTENTS_PLUGIN_TYPE, ContentsPluginPrivate))
+
+struct _ContentsPluginPrivate {
+    gchar       *metadata;
+};
+
 G_DEFINE_ABSTRACT_TYPE (ContentsPlugin, contents_plugin, G_TYPE_OBJECT);
 
 static void contents_plugin_class_init (ContentsPluginClass *klass)
 {
+    g_type_class_add_private (klass, sizeof (ContentsPluginPrivate));
 }
 
 static void contents_plugin_init (ContentsPlugin *item)
 {
+    item->priv = CONTENTS_PLUGIN_GET_PRIVATE (item);
+    memset (item->priv, 0, sizeof (ContentsPluginPrivate));
+}
+
+void contents_plugin_set_metadata (ContentsPlugin *self, gchar *metadata)
+{
+    if (self->priv->metadata != NULL)
+        g_free (self->priv->metadata);
+    self->priv->metadata = g_strdup (metadata);
+}
+
+const gchar* contents_plugin_get_metadata (ContentsPlugin *self)
+{
+    return (const gchar*) self->priv->metadata;
 }
 
 const gchar* contents_plugin_get_name (ContentsPlugin *self)

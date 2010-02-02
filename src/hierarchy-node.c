@@ -657,6 +657,13 @@ static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposi
                         g_warning ("Unable to identify contents exposing policy, found %s", str);
                         ret = FALSE;
                     }
+                    else {
+                        str = (gchar*) xmlGetProp (subnode, (xmlChar*) "metadata");
+                        if (str != NULL) {
+                            contents_plugin_set_metadata (exposing->contents_callback, str);
+                            xmlFree (str);
+                        }
+                    }
                 }
             }
             else {

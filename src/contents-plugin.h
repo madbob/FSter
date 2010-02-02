@@ -38,9 +38,11 @@
 
 typedef struct _ContentsPlugin         ContentsPlugin;
 typedef struct _ContentsPluginClass    ContentsPluginClass;
+typedef struct _ContentsPluginPrivate  ContentsPluginPrivate;
 
 struct _ContentsPlugin {
     GObject             	parent;
+    ContentsPluginPrivate   *priv;
 };
 
 struct _ContentsPluginClass {
@@ -51,6 +53,9 @@ struct _ContentsPluginClass {
 };
 
 GType           contents_plugin_get_type        ();
+
+void            contents_plugin_set_metadata    (ContentsPlugin *self, gchar *metadata);
+const gchar*    contents_plugin_get_metadata    (ContentsPlugin *self);
 
 const gchar*    contents_plugin_get_name        (ContentsPlugin *self);
 gchar*          contents_plugin_get_file        (ContentsPlugin *self, ItemHandler *item);
