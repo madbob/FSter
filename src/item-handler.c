@@ -99,11 +99,11 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                 types are listed before any other metadata
             */
             if (strcmp ((gchar*) key, "rdf:type") == 0) {
-                stats = g_strdup_printf ("<%s> a %s", item->priv->subject, (gchar*) value);
+                stats = g_strdup_printf ("a %s", (gchar*) value);
                 types = g_list_prepend (types, stats);
             }
             else {
-                stats = g_strdup_printf ("<%s> %s \"%s\"", item->priv->subject, (gchar*) key, (gchar*) value);
+                stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
                 statements = g_list_prepend (statements, stats);
             }
         }
@@ -117,16 +117,14 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     if (statements == NULL)
         return;
 
-    stats = from_glist_to_string (statements, " . ", TRUE);
+    stats = from_glist_to_string (statements, " ; ", TRUE);
 
     if (types == NULL) {
-        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s }",
-                                 item->priv->subject, item->priv->subject, stats);
+        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject ; a nie:InformationElement ; %s }", item->priv->subject, stats);
     }
     else {
-        tys = from_glist_to_string (types, " . ", TRUE);
-        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject . <%s> a nie:InformationElement . %s . %s }",
-                                 item->priv->subject, item->priv->subject, tys, stats);
+        tys = from_glist_to_string (types, " ; ", TRUE);
+        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject ; a nie:InformationElement ; %s ; %s }", item->priv->subject, tys, stats);
         g_free (tys);
     }
 

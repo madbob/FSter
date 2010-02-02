@@ -159,29 +159,36 @@ static int create_item_by_path (const gchar *path, NODE_TYPE type, ItemHandler *
 {
     int parent_type;
     gchar *name;
-    gchar *dir;
-    gchar *dup_path;
     ItemHandler *item;
     ItemHandler *parent;
 
-    dup_path = strdupa (path);
-    name = basename (dup_path);
-    dir = dirname (dup_path);
+    name = g_path_get_dirname (path);
 
-    parent = verify_exposed_path (dir);
-    if (parent == NULL)
+    parent = verify_exposed_path (name);
+    if (parent == NULL) {
+        g_free (name);
         return -ENOTDIR;
+    }
+
+    g_free (name);
+    name = g_path_get_basename (path);
 
     item = verify_exposed_path_in_folder (NULL, parent, name);
-    if (item != NULL)
+    if (item != NULL) {
+        g_free (name);
         return -EEXIST;
+    }
 
     parent_type = item_handler_get_format (parent);
     if (parent_type != ITEM_IS_VIRTUAL_FOLDER && parent_type != ITEM_IS_MIRROR_FOLDER &&
-            parent_type != ITEM_IS_STATIC_FOLDER && parent_type != ITEM_IS_SET_FOLDER)
+            parent_type != ITEM_IS_STATIC_FOLDER && parent_type != ITEM_IS_SET_FOLDER) {
+        g_free (name);
         return -ENOTDIR;
+    }
 
     item = item_handler_attach_child (parent, type, name);
+    g_free (name);
+
     if (item == NULL)
         return -EACCES;
 
