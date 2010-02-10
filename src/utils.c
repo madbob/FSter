@@ -30,27 +30,30 @@ void easy_list_free (GList *list)
 
 gchar* from_glist_to_string (GList *strings, const gchar *separator, gboolean free_list)
 {
-    register int i;
+    int index;
+    int tot_len;
     gchar *ret;
-    gchar **array;
     GList *iter;
 
-    array = alloca (g_list_length (strings) + 1);
+    if (strings == NULL)
+        return g_strdup ("");
 
-    for (iter = strings, i = 0; iter; iter = g_list_next (iter), i++)
-        array [i] = (gchar*) iter->data;
+    tot_len = 0;
 
-    array [i] = NULL;
-    ret = g_strjoinv (separator, array);
+    for (iter = strings; iter; iter = g_list_next (iter))
+        tot_len += strlen ((gchar*) iter->data);
 
-    if (free_list == TRUE) {
-        for (iter = strings; iter; iter = g_list_next (iter))
-            g_free (iter->data);
+    /*
+        Extra-large allocation...
+    */
+    ret = alloca (tot_len * 2);
+    index = 0;
 
-        g_list_free (strings);
-    }
+    for (iter = strings; iter != NULL && iter->next != NULL; iter = g_list_next (iter))
+        index += snprintf (ret + index, (tot_len * 2) - index, "%s%s", (gchar*) iter->data, separator);
+    snprintf (ret + index, (tot_len * 2) - index, "%s", (gchar*) iter->data);
 
-    return ret;
+    return g_strdup (ret);
 }
 
 void check_and_create_folder (gchar *path)
