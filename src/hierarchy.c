@@ -235,6 +235,14 @@ ItemHandler* verify_exposed_path (const gchar *path)
         iter = NULL;
         level = ExposingTree;
 
+        /*
+            Note: here is not suggested to directly check existing files if the node is a
+            mirror_content, because the complete chain of parents items is required when (for
+            example) creating a new file (to rebuild the complete real path to touch). Perhaps is
+            a good idea to shorthand here access to directly mapped filesystem, but adopt a
+            different strategy in ifs_create()
+        */
+
         for (iter = path_tokens; iter; iter = g_list_next (iter)) {
             item = verify_exposed_path_in_folder (level, item, (const gchar*) iter->data);
             if (item == NULL)
@@ -285,6 +293,10 @@ HierarchyNode* node_at_path (const gchar *path)
 
             level = item_handler_get_logic_node (item);
 
+            /**
+                TODO    This will be modified as soon as we permit to hook dynamic folders under
+                        a system_folders or mirror_content node
+            */
             /*
                 This is because hierarchy into a <mirror_content> is only the
                 <mirror_content> itself, so we can avoid go deeper

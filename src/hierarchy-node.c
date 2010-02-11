@@ -1316,9 +1316,9 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
                 type = ITEM_IS_MIRROR_ITEM;
 
             witem = g_object_new (ITEM_HANDLER_TYPE,
-                                  "type", type, "parent", parent,
-                                  "node", node, "file_path", item_path,
-                                  "exposed_name", namelist [i]->d_name, NULL);
+                                    "type", type, "parent", parent,
+                                    "node", node, "file_path", item_path,
+                                    "exposed_name", namelist [i]->d_name, NULL);
 
             nodes_cache_set_by_path (cache, witem, item_path);
         }
@@ -1444,7 +1444,7 @@ GList* hierarchy_node_get_children (HierarchyNode *node, ItemHandler *parent)
  * @parent: item to use as pivot for the search and if specified the function
  * returns only #ItemHandler which are child of this, or NULL
  *
- * Retrieves contents from #HierarchyNode s under the specified @node
+ * Retrieves contents from #HierarchyNode under the specified @node
  *
  * Return value: a list of #ItemHandler, must be freed with g_list_free()
  * when no longer in use
@@ -1455,6 +1455,9 @@ GList* hierarchy_node_get_subchildren (HierarchyNode *node, ItemHandler *parent)
     GList *ret;
     GList *subchildren;
     HierarchyNode *child;
+
+    if (parent != NULL && item_handler_is_folder (parent) == FALSE)
+        return NULL;
 
     ret = NULL;
 
@@ -1509,7 +1512,9 @@ const gchar* hierarchy_node_get_mirror_path (HierarchyNode *node)
  *
  * To know if contents of the specified #HierarchyNode have to be hide in the
  * toplevel filesystem presentation. In this case, items are not listed into
- * the folders but may be accessed when explicitely referenced
+ * the folders but may be accessed when explicitely referenced. Please use
+ * item_handler_get_hidden() to know when to list an item or not: that
+ * routine involves a more complete evaluation
  *
  * Return value: TRUE if contents of the @node are required to be hidden,
  * FALSE otherwise

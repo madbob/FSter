@@ -293,17 +293,17 @@ static int ifs_readdir (const char *path, void *buf, fuse_fill_dir_t filler,
             for (iter = items; iter; iter = g_list_next (iter)) {
                 child = (ItemHandler*) iter->data;
 
-                if (hierarchy_node_hide_contents (item_handler_get_logic_node (child)) == TRUE)
+                if (item_handler_get_hidden (child) == TRUE)
+                    continue;
+
+                name = item_handler_exposed_name (child);
+                if (name == NULL)
                     continue;
 
                 if (item_handler_stat (child, &st) == 0)
                     ptr_st = &st;
                 else
                     ptr_st = NULL;
-
-                name = item_handler_exposed_name (child);
-                if (name == NULL)
-                    continue;
 
                 file_path = g_build_filename (path, name, NULL);
                 nodes_cache_set_by_path (cache, child, file_path);
@@ -361,12 +361,27 @@ static int ifs_mkdir (const char *path, mode_t mode)
 */
 static int ifs_unlink (const char *path)
 {
+    int ret;
     ItemHandler *target;
 
     set_permissions ();
     target = verify_exposed_path (path);
-    item_handler_remove (target);
-    return 0;
+
+    if (target != NULL) {
+        if (item_handler_is_folder (target) == FALSE) {
+            item_handler_remove (target);
+            nodes_cache_remove_by_path (get_cache_reference (), path);
+            ret = 0;
+        }
+        else {
+            ret = -EISDIR;
+        }
+    }
+    else {
+        ret = -ENOENT;
+    }
+
+    return ret;
 }
 
 /**
@@ -379,17 +394,22 @@ static int ifs_unlink (const char *path)
 */
 static int ifs_rmdir (const char *path)
 {
+    int ret;
     ItemHandler *target;
 
     set_permissions ();
     target = verify_exposed_path (path);
 
-    if (item_handler_is_folder (target)) {
+    if (target != NULL && item_handler_is_folder (target)) {
         item_handler_remove (target);
-        return 0;
+        nodes_cache_remove_by_path (get_cache_reference (), path);
+        ret = 0;
     }
-    else
-        return -ENOTDIR;
+    else {
+        ret = -ENOTDIR;
+    }
+
+    return ret;
 }
 
 /**
@@ -471,6 +491,7 @@ static int ifs_rename (const char *from, const char *to)
     }
 
     replace_hierarchy_node (start, target);
+    nodes_cache_remove_by_path (get_cache_reference (), from);
     return 0;
 }
 

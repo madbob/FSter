@@ -423,6 +423,30 @@ GList* item_handler_get_children (ItemHandler *item)
 }
 
 /**
+ * item_handler_get_hidden:
+ * @item: an #ItemHandler
+ *
+ * To check if the given @item has to be hidden while listing the parent
+ * folder or not.
+ * The current hiding policy is to mask only elements in the root of a node
+ * signed with "hidden=yes" in the configuration (actually, only
+ * system_folders), but not those which appear deeper in the hierarchy. This
+ * is to permit chrooted applications to list system and configuration
+ * folders (e.g. OpenOffice checks for translation files)
+ *
+ * Return value: %TRUE if the #ItemHandler has to be hidden, %FALSE otherwise
+ **/
+gboolean item_handler_get_hidden (ItemHandler *item)
+{
+    ItemHandler *parent;
+    HierarchyNode *node;
+
+    node = item_handler_get_logic_node (item);
+    parent = item_handler_get_parent (item);
+    return (hierarchy_node_hide_contents (node)) && (parent == NULL || node != item_handler_get_logic_node (parent));
+}
+
+/**
  * item_handler_exposed_name:
  * @item: an #ItemHandler
  *
@@ -754,7 +778,9 @@ void item_handler_close (ItemHandler *item, int fd)
  * @item: an #ItemHandler
  *
  * Destroyes the @item, removing all related metadata from Tracker and
- * deleting the real file it wraps
+ * deleting the real file it wraps.
+ * Attention: this function do not update the running nodes cache, please
+ * provide elsewhere
  */
 void item_handler_remove (ItemHandler *item)
 {

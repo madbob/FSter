@@ -78,6 +78,7 @@ CONTENT_TYPE    item_handler_get_format         (ItemHandler *item);
 ItemHandler*    item_handler_get_parent         (ItemHandler *item);
 HierarchyNode*  item_handler_get_logic_node     (ItemHandler *item);
 GList*          item_handler_get_children       (ItemHandler *item);
+gboolean        item_handler_get_hidden         (ItemHandler *item);
 
 const gchar*    item_handler_exposed_name       (ItemHandler *item);
 int             item_handler_open               (ItemHandler *item, int flags);

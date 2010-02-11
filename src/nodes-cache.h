@@ -55,5 +55,6 @@ NodesCache*     nodes_cache_new                 ();
 
 ItemHandler*    nodes_cache_get_by_path         (NodesCache *cache, const gchar *path);
 void            nodes_cache_set_by_path         (NodesCache *cache, ItemHandler *item, const gchar *path);
+void            nodes_cache_remove_by_path      (NodesCache *cache, const gchar *path);
 
 #endif

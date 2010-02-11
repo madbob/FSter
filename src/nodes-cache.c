@@ -122,3 +122,15 @@ void nodes_cache_set_by_path (NodesCache *cache, ItemHandler *item, const gchar 
 
     g_static_rw_lock_writer_unlock (&(cache->priv->lock));
 }
+
+/**
+ * nodes_cache_remove_by_path:
+ * @cache: instance of #NodesCache to manipulate
+ * @path: absolute path to remove
+ *
+ * Removes an item from the @cache
+ **/
+void nodes_cache_remove_by_path (NodesCache *cache, const gchar *path)
+{
+    g_hash_table_remove (cache->priv->bag, path);
+}
