@@ -750,27 +750,26 @@ int item_handler_open (ItemHandler *item, int flags)
 
     path = get_file_path (item);
 
-    if (path != NULL)
+    if (path != NULL) {
         ret = open (path, flags);
-    else
-        ret = -1;
+        if (ret == -1)
+            ret = -errno;
+    }
+    else {
+        ret = -ENOENT;
+    }
 
-    if (ret != -1)
-        g_object_ref (item);
-
+    g_object_ref (item);
     return ret;
 }
 
 /**
  * item_handler_close:
  * @item: an #ItemHandler
- * @fd: the file descriptor opened over @item with item_handler_open(). If
- * it is -1, the file is directly closed and passed to Tracker without
- * passing Go to collect $200
+ * @fd: the file descriptor opened over @item with item_handler_open()
  *
  * Closes an #ItemHandler opened with item_handler_open(), and decreases its
- * opening counter. If it is 0, and if it has been modified in any of the
- * previous sessions, the #ItemHandler is submitted to Tracker for re-indexing
+ * opening counter
  **/
 void item_handler_close (ItemHandler *item, int fd)
 {

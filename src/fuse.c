@@ -644,6 +644,8 @@ static int ifs_open (const char *path, struct fuse_file_info *fi)
         return -ENOENT;
 
     res = item_handler_open (target, fi->flags);
+    if (res < 0)
+        return res;
 
     item = allocate_opened_item (target, res);
     if (item == NULL) {
@@ -680,8 +682,8 @@ static int ifs_create (const char *path, mode_t mask, struct fuse_file_info *fi)
         return res;
 
     res = item_handler_open (target, fi->flags & ~O_CREAT);
-    if (res == -1)
-        return -EACCES;
+    if (res < 0)
+        return res;
 
     item = allocate_opened_item (target, res);
     if (item == NULL)
