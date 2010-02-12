@@ -235,18 +235,27 @@ static void hierarchy_node_init (HierarchyNode *node)
     memset (node->priv, 0, sizeof (HierarchyNodePrivate));
 }
 
+/*
+    A formula such as
+    some_text $parent{predicate} blabla #{param}
+    is traslated as
+    some_text \1 blabla valueofparam
+
+    Positional parameters are the indexes in the returned GList of MetadataDesc elements, each
+    describing how to access a given metadata
+*/
 static GList* parse_reference_formula (gchar *value, gchar **output)
 {
     int i;
     int e;
     int token_pos;
     int offset;
-    int formula_size;
     gboolean handled;
-    gchar *formula;
     gchar *meta_name;
     gchar *end_name;
+    const gchar *param_value;
     GList *ret;
+    GString *formula;
     MetadataDesc *meta;
 
     i = 0;
@@ -254,10 +263,7 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
     token_pos = 1;
     meta = NULL;
     ret = NULL;
-    formula_size = strlen (value) + 1;
-
-    *output = g_new0 (gchar, formula_size);
-    formula = *output;
+    formula = g_string_new ("");
 
     while (value [i] != '\0') {
         handled = FALSE;
@@ -290,6 +296,7 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
                     break;
 
                 *end_name = '\0';
+                handled = TRUE;
 
                 if (strcmp (meta_name, "/subject") == 0) {
                     meta->means_subject = TRUE;
@@ -298,24 +305,55 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
                     meta->metadata = properties_pool_get_by_name (meta_name);
                     if (meta->metadata == NULL) {
                         g_warning ("Unable to retrieve metadata claimed in rule: %s\n", meta_name);
+                        handled = FALSE;
                         break;
                     }
                 }
 
-                ret = g_list_prepend (ret, meta);
+                /*
+                    If the required metadata is not found among the set of available properties,
+                    just fallback skipping that portion of formula
+                */
+
+                if (handled == TRUE) {
+                    ret = g_list_prepend (ret, meta);
+                    g_string_append_printf (formula, "\\%d", token_pos);
+                    token_pos++;
+                }
+
                 meta = NULL;
-
-                e += snprintf (formula + e, formula_size - e, "\\%d", token_pos);
-                token_pos++;
-
                 handled = TRUE;
                 i += 1 + offset + strlen (meta_name) + 2;
 
             } while (0);
         }
+        else if (value [i] == '#') {
+            do {
+                if (value [i + 1] != '{')
+                    break;
+
+                meta_name = value + i + 2;
+
+                end_name = strchr (meta_name, '}');
+                if (end_name == NULL)
+                    break;
+
+                *end_name = '\0';
+                param_value = get_user_param (meta_name);
+
+                if (param_value == NULL)
+                    g_warning ("Parameter %s was not set, fallback to empty string\n", meta_name);
+                else
+                    g_string_append_printf (formula, "%s", param_value);
+
+                handled = TRUE;
+                i += strlen (meta_name) + 2;
+
+            } while (0);
+        }
 
         if (handled == FALSE) {
-            formula [e] = value [i];
+            g_string_append_c (formula, value [i]);
             e++;
             i++;
         }
@@ -323,6 +361,8 @@ static GList* parse_reference_formula (gchar *value, gchar **output)
 
     if (meta != NULL)
         g_free (meta);
+
+    *output = g_string_free (formula, FALSE);
 
     if (ret != NULL)
         return g_list_reverse (ret);

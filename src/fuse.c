@@ -881,6 +881,14 @@ static void check_configuration ()
 static void* ifs_init (struct fuse_conn_info *conn)
 {
     check_configuration ();
+
+    /*
+        User parameters are directly embedded in the hierarchy tree (cfr.
+        parse_reference_formula()), so we can destroy the table at the end of the configuration
+        file parsing
+    */
+    set_user_param (NULL, NULL);
+
     return NULL;
 }
 
@@ -949,6 +957,10 @@ static void usage ()
 
 static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
 {
+    int ret;
+    static gboolean is_param = FALSE;
+    static gchar *param_name = NULL;
+
     switch (key) {
         case KEY_HELP:
             usage ();
@@ -968,7 +980,23 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
             break;
 
         default:
-            return 1;
+            if (is_param == TRUE && param_name != NULL) {
+                set_user_param (param_name, g_strdup (arg));
+                param_name = NULL;
+                ret = 0;
+            }
+
+            else if (strncmp (arg, "-p", 2) == 0) {
+                is_param = TRUE;
+                param_name = g_strdup (arg + 2);
+                ret = 0;
+            }
+
+            else {
+                ret = 1;
+            }
+
+            return ret;
             break;
     }
 

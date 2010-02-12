@@ -680,19 +680,26 @@ void item_handler_load_metadata (ItemHandler *item, const gchar *metadata, const
 static const gchar* get_file_path (ItemHandler *item)
 {
     const gchar *path;
+    gchar *file_path;
     CONTENT_TYPE type;
 
     if (item->priv->file_path == NULL) {
         type = item_handler_get_format (item);
 
         if (item->priv->contents != NULL) {
-            item->priv->file_path = contents_plugin_get_file (item->priv->contents, item);
+            file_path = contents_plugin_get_file (item->priv->contents, item);
+            g_object_set (item, "file_path", file_path, NULL);
+            g_free (file_path);
         }
         else {
             if (IS_VIRTUAL (type)) {
                 path = item_handler_get_metadata (item, "nie:isStoredAs");
-                if (path != NULL)
-                    item->priv->file_path = g_filename_from_uri (path, NULL, NULL);
+
+                if (path != NULL) {
+                    file_path = g_filename_from_uri (path, NULL, NULL);
+                    g_object_set (item, "file_path", file_path, NULL);
+                    g_free (file_path);
+                }
             }
             else if (HAS_NOT_META (type)) {
                 /*

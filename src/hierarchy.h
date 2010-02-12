@@ -41,4 +41,7 @@ void                replace_hierarchy_node                  (ItemHandler *old_it
 TrackerClient*      get_tracker_client                      ();
 NodesCache*         get_cache_reference                     ();
 
+void                set_user_param                          (gchar *name, gchar *value);
+const gchar*        get_user_param                          (gchar *name);
+
 #endif

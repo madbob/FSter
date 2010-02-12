@@ -27,6 +27,7 @@ static GList                            *LoadedContentsPlugins      = NULL;
 static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
 static TrackerClient                    *TrackerRef                 = NULL;
+static GHashTable                       *Params                     = NULL;
 
 static void create_dummy_references ()
 {
@@ -365,4 +366,26 @@ TrackerClient* get_tracker_client ()
 NodesCache* get_cache_reference ()
 {
     return Cache;
+}
+
+void set_user_param (gchar *name, gchar *value)
+{
+    if (Params == NULL)
+        Params = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+
+    if (name == NULL && value == NULL) {
+        g_hash_table_destroy (Params);
+        Params = NULL;
+        return;
+    }
+
+    g_hash_table_insert (Params, name, value);
+}
+
+const gchar* get_user_param (gchar *name)
+{
+    if (Params == NULL)
+        return NULL;
+
+    return (const gchar*) g_hash_table_lookup (Params, name);
 }
