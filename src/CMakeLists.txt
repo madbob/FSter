@@ -84,4 +84,4 @@ target_link_libraries(fster
     )
 
 INSTALL(TARGETS fster DESTINATION bin)
-INSTALL(CODE "EXEC_PROGRAM(setcap ARGS \\\"cap_setuid+iep cap_setgid+iep cap_sys_admin+iep\\\" ${CMAKE_INSTALL_PREFIX}/bin/fster)")
+INSTALL(CODE "EXEC_PROGRAM(setcap ARGS \\\"cap_setuid+iep cap_setgid+iep cap_sys_admin+iep\\\" \$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/bin/fster)")
