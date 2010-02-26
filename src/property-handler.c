@@ -20,24 +20,17 @@
 #include "hierarchy.h"
 #include "utils.h"
 
-#define RDFS_PREFIX "http://www.w3.org/2000/01/rdf-schema#"
-#define TRACKER_PREFIX "http://www.tracker-project.org/ontologies/tracker#"
+#define XSD_PREFIX      "http://www.w3.org/2001/XMLSchema#"
+#define XSD_BOOLEAN     XSD_PREFIX "boolean"
+#define XSD_DATE        XSD_PREFIX "date"
+#define XSD_DATETIME    XSD_PREFIX "dateTime"
+#define XSD_DOUBLE      XSD_PREFIX "double"
+#define XSD_INTEGER     XSD_PREFIX "integer"
+#define XSD_STRING      XSD_PREFIX "string"
+#define XSD_CLASS       "http://www.w3.org/2000/01/rdf-schema#Class"
 
-#define RDF_PREFIX TRACKER_RDF_PREFIX
-#define RDF_PROPERTY RDF_PREFIX "Property"
-#define RDF_TYPE RDF_PREFIX "type"
-
-#define RDFS_CLASS RDFS_PREFIX "Class"
-#define RDFS_DOMAIN RDFS_PREFIX "domain"
-#define RDFS_RANGE RDFS_PREFIX "range"
-#define RDFS_SUB_CLASS_OF RDFS_PREFIX "subClassOf"
-#define RDFS_SUB_PROPERTY_OF RDFS_PREFIX "subPropertyOf"
-
-#define NRL_PREFIX TRACKER_NRL_PREFIX
-#define NRL_INVERSE_FUNCTIONAL_PROPERTY TRACKER_NRL_PREFIX "InverseFunctionalProperty"
-#define NRL_MAX_CARDINALITY NRL_PREFIX "maxCardinality"
-
-static TrackerClass* class_get_by_uri (gchar *uri);
+static GHashTable   *namespaces     = NULL;
+static GHashTable   *properties     = NULL;
 
 void properties_pool_init ()
 {
@@ -46,9 +39,14 @@ void properties_pool_init ()
     gchar **values;
     GPtrArray *response;
     GError *error;
-    TrackerNamespace *namespace;
 
-    tracker_ontology_init ();
+    if (namespaces != NULL) {
+        g_warning ("Properties pool is already inited.");
+        return;
+    }
+
+    namespaces = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
+    properties = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
 
     query = g_strdup_printf ("SELECT ?s ?prefix WHERE { ?s a tracker:Namespace . ?s tracker:prefix ?prefix }");
     error = NULL;
@@ -63,10 +61,12 @@ void properties_pool_init ()
 
     for (i = 0; i < response->len; i++) {
         values = (gchar**) g_ptr_array_index (response, i);
-        namespace = tracker_namespace_new ();
-        tracker_namespace_set_uri (namespace, values [0]);
-        tracker_namespace_set_prefix (namespace, values [1]);
-        tracker_ontology_add_namespace (namespace);
+        g_hash_table_insert (namespaces, values [1], values [0]);
+
+        /*
+            String are not freed here, are maintained in the hash table
+        */
+
         g_free (values);
     }
 
@@ -75,17 +75,16 @@ void properties_pool_init ()
 
 void properties_pool_finish ()
 {
-    tracker_ontology_shutdown ();
+    g_hash_table_destroy (namespaces);
+    g_hash_table_destroy (properties);
+    namespaces = NULL;
 }
 
 static gchar* name_to_uri (gchar *name)
 {
-    register int i;
-    guint num;
     gchar *sep;
     const gchar *uri;
     gchar *namedup;
-    TrackerNamespace **namespaces;
 
     namedup = strdupa (name);
 
@@ -96,27 +95,51 @@ static gchar* name_to_uri (gchar *name)
     }
 
     *sep = '\0';
-    uri = NULL;
-    namespaces = tracker_ontology_get_namespaces (&num);
 
-    for (i = 0; i < num; i++) {
-        if (strcmp (namedup, tracker_namespace_get_prefix (namespaces [i])) == 0) {
-            uri = tracker_namespace_get_uri (namespaces [i]);
+    uri = (const gchar*) g_hash_table_lookup (namespaces, namedup);
+
+    if (uri != NULL) {
+        return g_strdup_printf ("%s%s", uri, sep + 1);
+    }
+    else {
+        g_warning ("Unable to retrieve predicate name in ontology: '%s'", name);
+        return NULL;
+    }
+}
+
+static gchar* uri_to_name (gchar *uri)
+{
+    gchar *name;
+    gchar *namespace;
+    GList *prefixes;
+    GList *iter;
+
+    prefixes = g_hash_table_get_keys (namespaces);
+    name = NULL;
+
+    for (iter = prefixes; iter; iter = g_list_next (iter)) {
+        namespace = g_hash_table_lookup (namespaces, iter->data);
+        if (g_str_has_prefix (uri, namespace)) {
+            name = iter->data;
             break;
         }
     }
 
-    if (uri != NULL)
-        return g_strdup_printf ("%s%s", uri, sep + 1);
+    g_list_free (prefixes);
 
-    g_warning ("Unable to retrieve predicate name in ontology: '%s'", name);
-    return NULL;
+    if (name != NULL) {
+        return g_strdup_printf ("%s:%s", name, uri + strlen (namespace));
+    }
+    else {
+        g_warning ("Unable to retrieve uri in ontology: '%s'", uri);
+        return NULL;
+    }
 }
 
-TrackerProperty* properties_pool_get_by_name (gchar *name)
+Property* properties_pool_get_by_name (gchar *name)
 {
     gchar *uri;
-    TrackerProperty *ret;
+    Property *ret;
 
     uri = name_to_uri (name);
     if (uri == NULL)
@@ -127,151 +150,70 @@ TrackerProperty* properties_pool_get_by_name (gchar *name)
     return ret;
 }
 
-static void fetch_property (gchar *uri)
+static Property* fetch_property (gchar *uri)
 {
-    register int i;
     gchar *query;
+    gchar *name;
     gchar **values;
-    gchar *subject;
-    gchar *predicate;
-    gchar *object;
     GPtrArray *response;
     GError *error;
-    TrackerClass *class;
-    TrackerClass *super_class;
-    TrackerProperty *property;
-    TrackerProperty *super_property;
+    Property *prop;
+    PROPERTY_DATATYPE data_type;
 
     error = NULL;
-    query = g_strdup_printf ("SELECT ?pred ?val WHERE { <%s> ?pred ?val }", uri);
+    query = g_strdup_printf ("SELECT ?range WHERE { <%s> rdfs:range ?range }", uri);
     response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
     g_free (query);
 
     if (response == NULL) {
         g_warning ("Unable to retrieve property %s: %s", uri, error->message);
         g_error_free (error);
-        return;
+        return NULL;
     }
 
-    for (i = 0; i < response->len; i++) {
-        values = (gchar**) g_ptr_array_index (response, i);
-        subject = uri;
-        predicate = values [0];
-        object = values [1];
+    prop = property_new ();
 
-        if (g_strcmp0 (predicate, RDF_TYPE) == 0) {
-            if (g_strcmp0 (object, RDFS_CLASS) == 0) {
-                class = tracker_class_new ();
-                tracker_class_set_uri (class, subject);
-                tracker_ontology_add_class (class);
-                g_object_unref (class);
-            }
-            else if (g_strcmp0 (object, RDF_PROPERTY) == 0) {
-                property = tracker_property_new ();
-                tracker_property_set_uri (property, subject);
-                tracker_ontology_add_property (property);
-            }
-        }
-        else if (g_strcmp0 (predicate, RDFS_SUB_CLASS_OF) == 0) {
-            class = class_get_by_uri (subject);
-            super_class = class_get_by_uri (object);
-            tracker_class_add_super_class (class, super_class);
-        }
-        else if (g_strcmp0 (predicate, RDFS_SUB_PROPERTY_OF) == 0) {
-            property = properties_pool_get_by_uri (subject);
-            super_property = properties_pool_get_by_uri (object);
-            tracker_property_add_super_property (property, super_property);
-        }
-        else if (g_strcmp0 (predicate, RDFS_DOMAIN) == 0) {
-            property = properties_pool_get_by_uri (subject);
-            class = class_get_by_uri (object);
-            tracker_property_set_domain (property, class);
-        }
-        else if (g_strcmp0 (predicate, RDFS_RANGE) == 0) {
-            property = properties_pool_get_by_uri (subject);
-            class = class_get_by_uri (object);
-            tracker_property_set_range (property, class);
-        }
-        else if (g_strcmp0 (predicate, NRL_MAX_CARDINALITY) == 0) {
-            if (atoi (object) == 1) {
-                property = properties_pool_get_by_uri (subject);
-                tracker_property_set_multiple_values (property, FALSE);
-            }
-        }
-        else if (g_strcmp0 (predicate, TRACKER_PREFIX "isAnnotation") == 0) {
-            if (g_strcmp0 (object, "true") == 0) {
-                property = properties_pool_get_by_uri (subject);
-                tracker_property_set_embedded (property, FALSE);
-            }
-        }
-        else if (g_strcmp0 (predicate, TRACKER_PREFIX "fulltextIndexed") == 0) {
-            if (strcmp (object, "true") == 0) {
-                property = properties_pool_get_by_uri (subject);
-                tracker_property_set_fulltext_indexed (property, TRUE);
-            }
-        }
-    }
-}
+    name = uri_to_name (uri);
+    property_set_name (prop, name);
+    g_free (name);
 
-static TrackerClass* class_get_by_uri (gchar *uri)
-{
-    TrackerClass *ret;
+    property_set_uri (prop, uri);
 
-    ret = tracker_ontology_get_class_by_uri (uri);
-    if (ret == NULL) {
-        fetch_property (uri);
-        ret = tracker_ontology_get_class_by_uri (uri);
-    }
+    values = (gchar**) g_ptr_array_index (response, 0);
 
-    return ret;
-}
+    if (strcmp (values [0], XSD_STRING) == 0)
+        data_type = PROPERTY_TYPE_STRING;
+    else if (strcmp (values [0], XSD_BOOLEAN) == 0)
+        data_type = PROPERTY_TYPE_BOOLEAN;
+    else if (strcmp (values [0], XSD_INTEGER) == 0)
+        data_type = PROPERTY_TYPE_INTEGER;
+    else if (strcmp (values [0], XSD_DOUBLE) == 0)
+        data_type = PROPERTY_TYPE_DOUBLE;
+    else if (strcmp (values [0], XSD_DATE) == 0)
+        data_type = PROPERTY_TYPE_DATE;
+    else if (strcmp (values [0], XSD_DATETIME) == 0)
+        data_type = PROPERTY_TYPE_DATETIME;
+    else if (strcmp (values [0], XSD_CLASS) == 0)
+        data_type = PROPERTY_TYPE_CLASS;
+    else
+        data_type = PROPERTY_TYPE_RESOURCE;
 
-TrackerProperty* properties_pool_get_by_uri (gchar *uri)
-{
-    TrackerProperty *prop;
+    g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
+    g_ptr_array_free (response, TRUE);
 
-    prop = tracker_ontology_get_property_by_uri (uri);
-    if (prop == NULL) {
-        fetch_property (uri);
-        prop = tracker_ontology_get_property_by_uri (uri);
-    }
+    property_set_datatype (prop, data_type);
 
+    g_hash_table_insert (properties, uri, prop);
     return prop;
 }
 
-gchar* property_handler_format_value (TrackerProperty *property, const gchar *value)
+Property* properties_pool_get_by_uri (gchar *uri)
 {
-    gchar *ret;
-    GDate *d;
-    struct tm tm;
+    Property *prop;
 
-    ret = NULL;
+    prop = g_hash_table_lookup (properties, uri);
+    if (prop == NULL)
+        prop = fetch_property (uri);
 
-    switch (tracker_property_get_data_type (property)) {
-        case TRACKER_PROPERTY_TYPE_STRING:
-            ret = g_strdup_printf ("\"%s\"", value);
-            break;
-
-        case TRACKER_PROPERTY_TYPE_DATETIME:
-            d = g_date_new ();
-            g_date_set_parse (d, value);
-
-            if (g_date_valid (d) == TRUE) {
-                g_date_to_struct_tm (d, &tm);
-                ret = g_strdup_printf ("%04d-%02d-%02dT%02d:%02d:%02dZ", tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday, tm.tm_hour, tm.tm_min, tm.tm_sec);
-            }
-
-            g_date_free (d);
-            break;
-
-        case TRACKER_PROPERTY_TYPE_BOOLEAN:
-        case TRACKER_PROPERTY_TYPE_INTEGER:
-        case TRACKER_PROPERTY_TYPE_DOUBLE:
-        case TRACKER_PROPERTY_TYPE_RESOURCE:
-        default:
-            ret = g_strdup (value);
-            break;
-    }
-
-    return ret;
+    return prop;
 }

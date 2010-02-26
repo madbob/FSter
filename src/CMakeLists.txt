@@ -1,13 +1,3 @@
-set(CMAKE_MODULE_PATH
-    ${FSter_SOURCE_DIR}/cmake/Modules
-    )
-
-SET(CMAKE_SKIP_BUILD_RPATH TRUE)
-SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
-SET(CMAKE_INSTALL_RPATH "${TRACKER_LIBRARIES}")
-SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
-find_package(Tracker REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(FUSE REQUIRED fuse)
 pkg_check_modules(GIO REQUIRED gio-2.0)
@@ -15,6 +5,11 @@ pkg_check_modules(GTHREAD2 REQUIRED gthread-2.0)
 pkg_check_modules(DBUSGLIB REQUIRED dbus-glib-1)
 pkg_check_modules(LIBXML REQUIRED libxml-2.0)
 pkg_check_modules(TRACKER_CLIENT REQUIRED tracker-client-0.7)
+
+SET(CMAKE_SKIP_BUILD_RPATH TRUE)
+SET(CMAKE_BUILD_WITH_INSTALL_RPATH TRUE)
+SET(CMAKE_INSTALL_RPATH "${TRACKER_LIBRARIES}")
+SET(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 ADD_DEFINITIONS(
     -D_FILE_OFFSET_BITS=64
@@ -31,6 +26,7 @@ set(fster_SRCS
     utils.c
     gfuse-loop.c
     hierarchy.c
+    property.c
     property-handler.c
     item-handler.c
     hierarchy-node.c
@@ -44,6 +40,7 @@ set(fster_HEADERS
     utils.h
     gfuse-loop.h
     hierarchy.h
+    property.h
     property-handler.h
     item-handler.h
     hierarchy-node.h

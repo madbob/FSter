@@ -20,13 +20,12 @@
 #define PROPERTY_HANDLER_H
 
 #include "core.h"
+#include "property.h"
 
-void                properties_pool_init            ();
-void                properties_pool_finish          ();
+void        properties_pool_init            ();
+void        properties_pool_finish          ();
 
-TrackerProperty*    properties_pool_get_by_name     (gchar *name);
-TrackerProperty*    properties_pool_get_by_uri      (gchar *uri);
-
-gchar*              property_handler_format_value   (TrackerProperty *property, const gchar *value);
+Property*   properties_pool_get_by_name     (gchar *name);
+Property*   properties_pool_get_by_uri      (gchar *uri);
 
 #endif

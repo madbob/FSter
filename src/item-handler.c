@@ -598,7 +598,7 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
  * Permits to obtain the list of all metadata attached to an #ItemHandler.
  * Those names can be then used with item_handler_get_metadata()
  *
- * Return value: a list of TrackerProperty, each of them rappresenting one of the metadata
+ * Return value: a list of Property, each of them rappresenting one of the metadata
  * assigned to @item
  **/
 GList* item_handler_get_all_metadata (ItemHandler *item)
@@ -609,7 +609,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
     GList *ret;
     GPtrArray *response;
     GError *error;
-    TrackerProperty *prop;
+    Property *prop;
 
     ret = NULL;
     error = NULL;
@@ -624,7 +624,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
         for (i = 0; i < response->len; i++) {
             values = (gchar**) g_ptr_array_index (response, i);
             prop = properties_pool_get_by_uri (values [0]);
-            item_handler_load_metadata (item, tracker_property_get_name (prop), values [1]);
+            item_handler_load_metadata (item, property_get_name (prop), values [1]);
             ret = g_list_prepend (ret, prop);
         }
 

@@ -17,6 +17,7 @@
  */
 
 #include "hierarchy-node.h"
+#include "property.h"
 #include "property-handler.h"
 #include "contents-plugin.h"
 #include "hierarchy.h"
@@ -44,7 +45,7 @@ typedef enum {
 
 typedef struct {
     METADATA_HOLDER     from;
-    TrackerProperty     *metadata;
+    Property            *metadata;
     gboolean            means_subject;
 } MetadataDesc;
 
@@ -903,7 +904,7 @@ static gchar* compose_value_from_many_metadata (ItemHandler *parent, GList *meta
 				if (met->means_subject == TRUE)
 					g_string_append_printf (str, "%s", item_handler_get_subject (parent));
 				else
-					g_string_append_printf (str, "%s", item_handler_get_metadata (parent, tracker_property_get_name (met->metadata)));
+					g_string_append_printf (str, "%s", item_handler_get_metadata (parent, property_get_name (met->metadata)));
 			}
 			else {
 				g_warning ("Metadata concatenation not yet supported");
@@ -929,7 +930,6 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     const gchar *meta_name;
     GList *iter;
     GList *statements;
-    TrackerClass *class;
     ValuedMetadataReference *meta_ref;
     MetadataDesc *component;
 
@@ -965,17 +965,17 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             stat = NULL;
                         }
                         else {
-                            stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (component->metadata));
+                            stat = g_strdup_printf ("?item %s ?item", property_get_name (component->metadata));
                         }
                     }
                     else if (meta_ref->metadata.means_subject == FALSE) {
                         if (component->means_subject == TRUE) {
-                            stat = g_strdup_printf ("?item %s ?item", tracker_property_get_name (meta_ref->metadata.metadata));
+                            stat = g_strdup_printf ("?item %s ?item", property_get_name (meta_ref->metadata.metadata));
                         }
                         else {
                             stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d",
-                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
-                                                    tracker_property_get_name (component->metadata), value_offset);
+                                                    property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                    property_get_name (component->metadata), value_offset);
                             value_offset++;
                         }
                     }
@@ -993,18 +993,18 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                         }
                         else {
                             stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
-                                                    tracker_property_get_name (component->metadata), value_offset, value_offset);
+                                                    property_get_name (component->metadata), value_offset, value_offset);
                         }
                     }
                     else if (meta_ref->metadata.means_subject == FALSE) {
                         if (component->means_subject == TRUE) {
                             stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
-                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset, value_offset);
+                                                    property_get_name (meta_ref->metadata.metadata), value_offset, value_offset);
                         }
                         else {
                             stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( ?var%d != ?var%d )",
-                                                    tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
-                                                    tracker_property_get_name (component->metadata), value_offset + 1,
+                                                    property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                    property_get_name (component->metadata), value_offset + 1,
                                                     value_offset, value_offset + 1);
                             value_offset += 2;
                         }
@@ -1026,27 +1026,27 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             }
                             else {
                                 stat = g_strdup_printf ("?item %s \"%s\"",
-                                                        tracker_property_get_name (component->metadata),
+                                                        property_get_name (component->metadata),
                                                         item_handler_get_subject (parent));
                             }
                         }
                         else if (meta_ref->metadata.means_subject == FALSE) {
                             if (component->means_subject == TRUE) {
                                 stat = g_strdup_printf ("?item %s \"%s\"",
-                                                        tracker_property_get_name (meta_ref->metadata.metadata),
+                                                        property_get_name (meta_ref->metadata.metadata),
                                                         item_handler_get_subject (parent));
                             }
                             else {
-                                meta_name = tracker_property_get_name (component->metadata);
+                                meta_name = property_get_name (component->metadata);
 
                                 if (item_handler_contains_metadata (parent, meta_name)) {
                                     stat = g_strdup_printf ("?item %s \"%s\"",
-                                                            tracker_property_get_name (meta_ref->metadata.metadata),
+                                                            property_get_name (meta_ref->metadata.metadata),
                                                             item_handler_get_metadata (parent, meta_name));
                                 }
                                 else {
                                     stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
-                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            property_get_name (meta_ref->metadata.metadata), value_offset,
                                                             item_handler_get_subject (parent), meta_name, value_offset);
                                     value_offset++;
                                 }
@@ -1063,28 +1063,28 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             }
                             else {
                                 stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
-                                                        tracker_property_get_name (component->metadata), value_offset,
+                                                        property_get_name (component->metadata), value_offset,
                                                         value_offset, item_handler_get_subject (parent));
                             }
                         }
                         else {
                             if (component->means_subject == TRUE) {
                                 stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
-                                                        tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                        property_get_name (meta_ref->metadata.metadata), value_offset,
                                                         value_offset, item_handler_get_subject (parent));
                             }
                             else {
-                                meta_name = tracker_property_get_name (component->metadata);
+                                meta_name = property_get_name (component->metadata);
 
                                 if (item_handler_contains_metadata (parent, meta_name)) {
                                     stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
-                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            property_get_name (meta_ref->metadata.metadata), value_offset,
                                                             value_offset, item_handler_get_metadata (parent, meta_name));
                                     value_offset++;
                                 }
                                 else {
                                     stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( ?var%d != ?var%d )",
-                                                            tracker_property_get_name (meta_ref->metadata.metadata), value_offset,
+                                                            property_get_name (meta_ref->metadata.metadata), value_offset,
                                                             item_handler_get_subject (parent), meta_name, value_offset + 1,
                                                             value_offset, value_offset + 1);
                                     value_offset += 2;
@@ -1114,26 +1114,12 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                     }
                 }
                 else {
-                    switch (tracker_property_get_data_type (meta_ref->metadata.metadata)) {
-                        case TRACKER_PROPERTY_TYPE_STRING:
+                    switch (property_get_datatype (meta_ref->metadata.metadata)) {
+                        case PROPERTY_TYPE_RESOURCE:
+                        case PROPERTY_TYPE_STRING:
                             true_val = g_strdup_printf ("\"%s\"", val);
                             g_free (val);
                             val = true_val;
-                            break;
-
-                        /**
-                            TODO    This is probably incorrect, or may be better managed. We need to
-                                    know if the value is to wrap between quotes (perhaps because it
-                                    involves a subject) or not (because is a class), suggestions are
-                                    welcome
-                        */
-                        case TRACKER_PROPERTY_TYPE_RESOURCE:
-                            class = tracker_property_get_range (meta_ref->metadata.metadata);
-                            if (strcmp (tracker_class_get_name (class), "rdfs:Class") != 0) {
-                                true_val = g_strdup_printf ("\"%s\"", val);
-                                g_free (val);
-                                val = true_val;
-                            }
                             break;
 
                         default:
@@ -1141,11 +1127,11 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                     }
 
                     if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                        stat = g_strdup_printf ("?item %s %s", tracker_property_get_name (meta_ref->metadata.metadata), val);
+                        stat = g_strdup_printf ("?item %s %s", property_get_name (meta_ref->metadata.metadata), val);
                     }
                     else {
                         stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != %s )",
-                                                tracker_property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, val);
+                                                property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, val);
                         value_offset++;
                     }
                 }
@@ -1247,12 +1233,12 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     for (iter = node->priv->expose_policy.exposed_metadata; iter; iter = g_list_next (iter)) {
         prop = (MetadataDesc*) iter->data;
         if (prop->from == METADATA_HOLDER_SELF && prop->means_subject == FALSE)
-            create_fetching_query_statement (tracker_property_get_name (prop->metadata), &statements, &required, &var);
+            create_fetching_query_statement (property_get_name (prop->metadata), &statements, &required, &var);
     }
 
     for (iter = node->priv->expose_policy.conditional_metadata; iter; iter = g_list_next (iter)) {
         meta_ref = (ValuedMetadataReference*) iter->data;
-        create_fetching_query_statement (tracker_property_get_name (meta_ref->metadata.metadata), &statements, &required, &var);
+        create_fetching_query_statement (property_get_name (meta_ref->metadata.metadata), &statements, &required, &var);
     }
 
     values_offset = 0;
@@ -1279,6 +1265,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
 
     response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
     if (response == NULL) {
+        printf ("%s\n", sparql);
         g_warning ("Unable to fetch items: %s", error->message);
         g_error_free (error);
         return NULL;
@@ -1600,7 +1587,7 @@ static gchar* collect_from_metadata_desc_list (gchar *formula, GList *components
             if (component->means_subject == TRUE)
                 metadata_value = item_handler_get_subject (reference);
             else
-                metadata_value = item_handler_get_metadata (reference, tracker_property_get_name (component->metadata));
+                metadata_value = item_handler_get_metadata (reference, property_get_name (component->metadata));
 
             g_string_append_printf (val, "%s", metadata_value);
             components_iter = g_list_next (components_iter);
@@ -1667,7 +1654,7 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
                     metadata_ref = (ValuedMetadataReference*) iter->data;
 
                     if (metadata_ref->get_from_extraction == i) {
-                        item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata.metadata), str);
+                        item_handler_load_metadata (item, property_get_name (metadata_ref->metadata.metadata), str);
                         metadata_set = TRUE;
 
                         /*
@@ -1702,7 +1689,7 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
 
         str = collect_from_metadata_desc_list (metadata_ref->formula, metadata_ref->involved, item, parent);
         if (str != NULL) {
-            item_handler_load_metadata (item, tracker_property_get_name (metadata_ref->metadata.metadata), str);
+            item_handler_load_metadata (item, property_get_name (metadata_ref->metadata.metadata), str);
             g_free (str);
         }
     }
@@ -1724,7 +1711,7 @@ static void inherit_metadata (HierarchyNode *node, ItemHandler *item, ItemHandle
 
         val = collect_from_metadata_desc_list (metadata->formula, metadata->involved, item, parent);
         if (val != NULL) {
-            item_handler_load_metadata (item, tracker_property_get_name (metadata->metadata.metadata), val);
+            item_handler_load_metadata (item, property_get_name (metadata->metadata.metadata), val);
             g_free (val);
         }
     }

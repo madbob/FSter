@@ -44,8 +44,4 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
-#define TRACKER_ENABLE_INTERNALS
-#include <libtracker-common/tracker-common.h>
-#undef TRACKER_ENABLE_INTERNALS
-
 #endif

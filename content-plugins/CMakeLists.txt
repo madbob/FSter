@@ -1,10 +1,4 @@
-set(CMAKE_MODULE_PATH
-    ${FSter_SOURCE_DIR}/cmake/Modules
-    )
-
 find_package(PkgConfig REQUIRED)
-find_package(Tracker REQUIRED)
-
 pkg_check_modules(GLIB REQUIRED glib-2.0)
 pkg_check_modules(LIBXML REQUIRED libxml-2.0)
 pkg_check_modules(TRACKER REQUIRED tracker-client-0.7)

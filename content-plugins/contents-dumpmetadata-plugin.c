@@ -17,6 +17,7 @@
  */
 
 #include "contents-dumpmetadata-plugin.h"
+#include "property.h"
 
 #define METADATA_DUMPS_PATH             "/tmp/.fster_dumps/"
 
@@ -36,7 +37,7 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
     const gchar *value;
     GList *metadata_list;
     GList *iter;
-    TrackerProperty *prop;
+    Property *prop;
 
     id = item_handler_exposed_name (item);
     path = g_build_filename (METADATA_DUMPS_PATH, id, NULL);
@@ -55,8 +56,8 @@ static gchar* contents_dumpmetadata_plugin_get_file (ContentsPlugin *self, ItemH
             metadata_list = item_handler_get_all_metadata (item);
 
             for (iter = metadata_list; iter; iter = g_list_next (iter)) {
-                prop = (TrackerProperty*) iter->data;
-                name = tracker_property_get_name (prop);
+                prop = iter->data;
+                name = property_get_name (prop);
                 value = item_handler_get_metadata (item, name);
 
                 if (value == NULL) {
