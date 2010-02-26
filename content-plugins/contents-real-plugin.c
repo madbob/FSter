@@ -32,7 +32,7 @@ static gchar* contents_real_plugin_get_file (ContentsPlugin *self, ItemHandler *
 
     meta = contents_plugin_get_metadata (self);
     if (meta == NULL)
-        meta = "nie:isStoredAs";
+        meta = "nie:url";
 
     path = (gchar*) item_handler_get_metadata (item, meta);
     if (path != NULL) {

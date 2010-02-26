@@ -1755,7 +1755,7 @@ static void assign_path (ItemHandler *item)
 
         tmp = g_filename_to_uri (path, NULL, NULL);
         g_object_set (item, "subject", tmp, NULL);
-        item_handler_load_metadata (item, "nie:isStoredAs", tmp);
+        item_handler_load_metadata (item, "nie:url", tmp);
         g_free (tmp);
     }
     else {
@@ -1827,7 +1827,7 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
         g_object_set (new_item, "exposed_name", newname, NULL);
 
         /*
-            Path is assigned before inherited metadata to permit recall nie:isStoredAs
+            Path is assigned before inherited metadata to permit recall nie:url
         */
         assign_path (new_item);
 

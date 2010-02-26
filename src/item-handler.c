@@ -693,7 +693,7 @@ static const gchar* get_file_path (ItemHandler *item)
         }
         else {
             if (IS_VIRTUAL (type)) {
-                path = item_handler_get_metadata (item, "nie:isStoredAs");
+                path = item_handler_get_metadata (item, "nie:url");
 
                 if (path != NULL) {
                     file_path = g_filename_from_uri (path, NULL, NULL);

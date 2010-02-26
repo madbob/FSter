@@ -24,7 +24,7 @@
                                         </self_conditions>
                                         <name value="$self{nie:title}" />
                                         <content>
-                                            <real_file metadata="nie:isStoredAs" />
+                                            <real_file metadata="nie:url" />
                                         </content>
                                     </visualization_policy>
                                 </file>
@@ -42,7 +42,7 @@
                                         </self_conditions>
                                         <name value="$self{nfo:fileName}" />
                                         <content>
-                                            <real_file metadata="nie:isStoredAs" />
+                                            <real_file metadata="nie:url" />
                                         </content>
                                     </visualization_policy>
                                 </file>
@@ -60,7 +60,7 @@
                                         </self_conditions>
                                         <name value="$self{nfo:fileName}" />
                                         <content>
-                                            <real_file metadata="nie:isStoredAs" />
+                                            <real_file metadata="nie:url" />
                                         </content>
                                     </visualization_policy>
                                 </file>
