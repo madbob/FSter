@@ -203,7 +203,7 @@ static Property* fetch_property (gchar *uri)
 
     property_set_datatype (prop, data_type);
 
-    g_hash_table_insert (properties, uri, prop);
+    g_hash_table_insert (properties, g_strdup (uri), prop);
     return prop;
 }
 
