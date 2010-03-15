@@ -28,6 +28,6 @@
 
 #include <dbus/dbus-glib.h>
 
-#include <libtracker-client/tracker.h>
+#include <libtracker-client/tracker-client.h>
 
 #endif

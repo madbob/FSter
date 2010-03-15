@@ -1010,6 +1010,7 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
 */
 int main (int argc, char *argv [])
 {
+    GMainLoop *gloop;
     GFuseLoop *loop;
     struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
 
@@ -1039,7 +1040,12 @@ int main (int argc, char *argv [])
     gfuse_loop_set_config (loop, args.argc, args.argv);
     gfuse_loop_run (loop);
 
-    g_main_loop_run (g_main_loop_new (NULL, FALSE));
+    gloop = g_main_loop_new (NULL, FALSE);
+    g_main_loop_run (gloop);
+
     fuse_opt_free_args (&args);
+    g_object_unref (loop);
+    g_object_unref (gloop);
+
     exit (0);
 }
