@@ -52,6 +52,7 @@ typedef struct {
 typedef struct {
     MetadataDesc        metadata;
     gchar               *formula;
+    gchar               *query;
     GList               *involved;                  // list of MetadataDesc
     gchar               *comparison_value;
     METADATA_OPERATOR   operator;
@@ -446,9 +447,16 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
                 xmlFree (value);
             }
             else {
-                g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
-                free_metadata_reference (ref);
-                ref = NULL;
+                value = (gchar*) xmlGetProp (node, (xmlChar*) "query");
+
+                if (value != NULL) {
+                    ref->involved = parse_reference_formula (value, &(ref->query));
+                }
+                else {
+                    g_warning ("Error: unrecognized metadata assignment behaviour in %s", (gchar*) node->name);
+                    free_metadata_reference (ref);
+                    ref = NULL;
+                }
             }
         }
     }
@@ -902,7 +910,7 @@ static gchar* compose_value_from_many_metadata (ItemHandler *parent, GList *meta
 
 			if (met->from == METADATA_HOLDER_PARENT) {
 				if (met->means_subject == TRUE)
-					g_string_append_printf (str, "%s", item_handler_get_subject (parent));
+					g_string_append_printf (str, "<%s>", item_handler_get_subject (parent));
 				else
 					g_string_append_printf (str, "%s", item_handler_get_metadata (parent, property_get_name (met->metadata)));
 			}
@@ -951,7 +959,7 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
             value or a specific other metadata, embedding that condition in the main SPARQL query
         */
 
-        if (involved_num == 1 && strcmp (meta_ref->formula, "\\1") == 0) {
+        if (involved_num == 1 && meta_ref->formula != NULL && strcmp (meta_ref->formula, "\\1") == 0) {
             component = (MetadataDesc*) meta_ref->involved->data;
 
             if (component->from == METADATA_HOLDER_SELF) {
@@ -1097,6 +1105,11 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                     g_warning ("Required a parent node, but none supplied");
                 }
             }
+        }
+        else if (meta_ref->query != NULL) {
+            val = compose_value_from_many_metadata (parent, meta_ref->involved, meta_ref->query);
+            stat = g_strdup_printf ("?item %s %s", property_get_name (meta_ref->metadata.metadata), val);
+            g_free (val);
         }
         else {
             if (involved_num == 0)
@@ -1263,9 +1276,10 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     sparql = build_sparql_query (NULL, var, statements);
     error = NULL;
 
+    printf ("%s\n", sparql);
+
     response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
     if (response == NULL) {
-        printf ("%s\n", sparql);
         g_warning ("Unable to fetch items: %s", error->message);
         g_error_free (error);
         return NULL;
