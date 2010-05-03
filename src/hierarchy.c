@@ -96,7 +96,7 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
         return;
     }
 
-    TrackerRef = tracker_connect (FALSE, G_MAXINT);
+    TrackerRef = tracker_client_new (0, G_MAXINT);
     properties_pool_init ();
     load_plugins ();
     saving_set = FALSE;
@@ -134,7 +134,7 @@ void destroy_hierarchy_tree ()
     g_object_unref (Cache);
     g_object_unref (ExposingTree);
     hierarchy_node_set_save_path (NULL);
-    tracker_disconnect (get_tracker_client ());
+    g_object_unref (get_tracker_client ());
     properties_pool_finish ();
 }
 
