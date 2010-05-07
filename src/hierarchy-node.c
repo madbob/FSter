@@ -91,6 +91,7 @@ struct _HierarchyNodePrivate {
     HierarchyNode       *node;
 
     gchar               *additional_option;
+    gchar               *mountpoint;
     gboolean            hide_contents;
     EditPolicy          save_policy;
     ExposePolicy        expose_policy;
@@ -511,6 +512,7 @@ static gint sort_extraction_metadata (gconstpointer a, gconstpointer b)
 static gboolean parse_editing_policy (EditPolicy *saving, xmlNode *root)
 {
     gchar *str;
+    gchar *tmp;
     gboolean ret;
     xmlNode *node;
     xmlNode *subnode;
@@ -565,7 +567,12 @@ static gboolean parse_editing_policy (EditPolicy *saving, xmlNode *root)
         else if (strcmp ((gchar*) node->name, "new_mirror_content") == 0) {
             str = (gchar*) xmlGetProp (root, (xmlChar*) "base_path");
             if (str != NULL) {
-                saving->hijack_folder = expand_path_to_absolute (str);
+                /*
+                    This is used only to parse #{param} strings!
+                */
+                parse_reference_formula (str, &tmp);
+                saving->hijack_folder = expand_path_to_absolute (tmp);
+                g_free (tmp);
                 xmlFree (str);
             }
         }
@@ -779,10 +786,23 @@ static void add_hide_property (HierarchyNode *this, xmlNode *root)
     }
 }
 
+static gchar* remove_trailing_slash (gchar *path)
+{
+    int len;
+
+    len = strlen (path);
+
+    if (path [len - 1] == '/')
+        return strndup (path, len - 1);
+    else
+        return strdup (path);
+}
+
 static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
 {
     register int i;
     gchar *str;
+    gchar *tmp;
     gboolean ret;
     xmlNode *node;
 
@@ -827,6 +847,17 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
         if (str != NULL)
             this->priv->name = str;
 
+        str = (gchar*) xmlGetProp (root, (xmlChar*) "mountpoint");
+        if (str != NULL) {
+            /*
+                This is used only to parse #{param} strings!
+            */
+            parse_reference_formula (str, &tmp);
+            this->priv->mountpoint = remove_trailing_slash (tmp);
+            g_free (tmp);
+            xmlFree (str);
+        }
+
         for (node = root->children; ret == TRUE && node; node = node->next) {
             if (strcmp ((gchar*) node->name, "editing_policy") == 0) {
                 ret = parse_editing_policy (&(this->priv->save_policy), node);
@@ -835,6 +866,10 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
                 ret = parse_exposing_policy (this, &(this->priv->expose_policy), node);
             }
             else {
+                /**
+                    TODO    Improve error reporting, with suggestions about
+                            potential reasons of the wrong configuration
+                */
                 g_warning ("Unrecognized tag %s in %s", (gchar*) node->name, this->priv->name);
                 ret = FALSE;
             }
@@ -1275,25 +1310,40 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
 
     sparql = build_sparql_query (NULL, var, statements);
     error = NULL;
-
-    printf ("%s\n", sparql);
+    items = NULL;
 
     response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
     if (response == NULL) {
+        printf ("%s\n", sparql);
         g_warning ("Unable to fetch items: %s", error->message);
         g_error_free (error);
-        return NULL;
+    }
+    else {
+        required = g_list_reverse (required);
+        items = build_items (node, parent, response, required);
+
+        g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
+        g_ptr_array_free (response, TRUE);
+        g_list_free (required);
     }
 
-    required = g_list_reverse (required);
-    items = build_items (node, parent, response, required);
-
-    g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
-    g_ptr_array_free (response, TRUE);
-    g_list_free (required);
     g_free (sparql);
-
     return items;
+}
+
+static GList* check_mountpoints (HierarchyNode *node, ItemHandler *parent, gchar *path)
+{
+    GList *iter;
+    HierarchyNode *child;
+
+    for (iter = node->priv->children; iter; iter = g_list_next (iter)) {
+        child = iter->data;
+
+        if (child->priv->mountpoint != NULL && strncmp (child->priv->mountpoint, path, strlen (child->priv->mountpoint)) == 0)
+            return hierarchy_node_get_subchildren (child, parent);
+    }
+
+    return NULL;
 }
 
 static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler *parent)
@@ -1319,6 +1369,10 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
 
     if (path == NULL)
         path = strdupa (node->priv->additional_option);
+
+    ret = check_mountpoints (node, parent, path);
+    if (ret != NULL)
+        return ret;
 
     ret = NULL;
     cache = get_cache_reference ();

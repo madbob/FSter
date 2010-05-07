@@ -293,17 +293,6 @@ HierarchyNode* node_at_path (const gchar *path)
                 break;
 
             level = item_handler_get_logic_node (item);
-
-            /**
-                TODO    This will be modified as soon as we permit to hook dynamic folders under
-                        a system_folders or mirror_content node
-            */
-            /*
-                This is because hierarchy into a <mirror_content> is only the
-                <mirror_content> itself, so we can avoid go deeper
-            */
-            if (hierarchy_node_get_format (level) == ITEM_IS_MIRROR_FOLDER)
-                break;
         }
 
         easy_list_free (path_tokens);
