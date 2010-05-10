@@ -94,6 +94,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
         g_hash_table_iter_init (&iter, table);
 
         while (g_hash_table_iter_next (&iter, &key, &value)) {
+#if 0
             prop = properties_pool_get_by_name ((gchar*) key);
 
             switch (property_get_datatype (prop)) {
@@ -107,6 +108,21 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                     stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
                     statements = g_list_prepend (statements, stats);
                     break;
+            }
+#endif
+
+            /*
+                If the Item has some rdf:type forced, it has to be managed in
+                special way so to build the right query, where all assigned
+                types are listed before any other metadata
+            */
+            if (strcmp ((gchar*) key, "rdf:type") == 0) {
+                stats = g_strdup_printf ("a %s", (gchar*) value);
+                types = g_list_prepend (types, stats);
+            }
+            else {
+                stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
+                statements = g_list_prepend (statements, stats);
             }
         }
 
