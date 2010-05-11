@@ -80,6 +80,8 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     gpointer value;
     GList *statements;
     GList *types;
+    GPtrArray *results;
+    GPtrArray *back_id;
     GHashTable *table;
     GHashTableIter iter;
     GError *error;
@@ -94,35 +96,18 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
         g_hash_table_iter_init (&iter, table);
 
         while (g_hash_table_iter_next (&iter, &key, &value)) {
-#if 0
             prop = properties_pool_get_by_name ((gchar*) key);
 
             switch (property_get_datatype (prop)) {
-                case PROPERTY_TYPE_RESOURCE:
-                case PROPERTY_TYPE_CLASS:
-                    stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
+                case PROPERTY_TYPE_STRING:
+                    stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
                     statements = g_list_prepend (statements, stats);
                     break;
 
                 default:
-                    stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
+                    stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
                     statements = g_list_prepend (statements, stats);
                     break;
-            }
-#endif
-
-            /*
-                If the Item has some rdf:type forced, it has to be managed in
-                special way so to build the right query, where all assigned
-                types are listed before any other metadata
-            */
-            if (strcmp ((gchar*) key, "rdf:type") == 0) {
-                stats = g_strdup_printf ("a %s", (gchar*) value);
-                types = g_list_prepend (types, stats);
-            }
-            else {
-                stats = g_strdup_printf ("%s \"%s\"", (gchar*) key, (gchar*) value);
-                statements = g_list_prepend (statements, stats);
             }
         }
 
@@ -138,22 +123,32 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     stats = from_glist_to_string (statements, " ; ", TRUE);
 
     if (types == NULL) {
-        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject ; a nie:InformationElement ; %s }", item->priv->subject, stats);
+        query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s }", stats);
     }
     else {
         tys = from_glist_to_string (types, " ; ", TRUE);
-        query = g_strdup_printf ("INSERT { <%s> a nfo:FileDataObject ; a nie:InformationElement ; %s ; %s }", item->priv->subject, tys, stats);
+        query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s ; %s }", tys, stats);
         g_free (tys);
     }
 
     g_free (stats);
 
     error = NULL;
+    results = tracker_resources_sparql_update_blank (get_tracker_client (), query, &error);
 
-    tracker_resources_sparql_update (get_tracker_client (), query, &error);
     if (error != NULL) {
         g_warning ("Error while saving metadata: %s", error->message);
         g_error_free (error);
+    }
+    else if (results->len != 1) {
+        g_warning ("Error while saving metadata, no ID returned");
+    }
+    else {
+        back_id = g_ptr_array_index (results, 0);
+        table = g_ptr_array_index (back_id, 0);
+        g_hash_table_iter_init (&iter, table);
+        g_hash_table_iter_next (&iter, NULL, &value);
+        item->priv->subject = g_strdup ((gchar*) value);
     }
 
     g_free (query);

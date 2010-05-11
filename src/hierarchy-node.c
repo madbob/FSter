@@ -1068,14 +1068,14 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                 stat = NULL;
                             }
                             else {
-                                stat = g_strdup_printf ("?item %s \"%s\"",
+                                stat = g_strdup_printf ("?item %s <%s>",
                                                         property_get_name (component->metadata),
                                                         item_handler_get_subject (parent));
                             }
                         }
                         else if (meta_ref->metadata.means_subject == FALSE) {
                             if (component->means_subject == TRUE) {
-                                stat = g_strdup_printf ("?item %s \"%s\"",
+                                stat = g_strdup_printf ("?item %s <%s>",
                                                         property_get_name (meta_ref->metadata.metadata),
                                                         item_handler_get_subject (parent));
                             }
@@ -1083,9 +1083,21 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                 meta_name = property_get_name (component->metadata);
 
                                 if (item_handler_contains_metadata (parent, meta_name)) {
-                                    stat = g_strdup_printf ("?item %s \"%s\"",
-                                                            property_get_name (meta_ref->metadata.metadata),
-                                                            item_handler_get_metadata (parent, meta_name));
+                                    val = g_strdup (item_handler_get_metadata (parent, meta_name));
+
+                                    switch (property_get_datatype (meta_ref->metadata.metadata)) {
+                                        case PROPERTY_TYPE_STRING:
+                                            true_val = g_strdup_printf ("\"%s\"", val);
+                                            g_free (val);
+                                            val = true_val;
+                                            break;
+
+                                        default:
+                                            break;
+                                    }
+
+                                    stat = g_strdup_printf ("?item %s %s",
+                                                            property_get_name (meta_ref->metadata.metadata), val);
                                 }
                                 else {
                                     stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d",
@@ -1163,7 +1175,6 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                 }
                 else {
                     switch (property_get_datatype (meta_ref->metadata.metadata)) {
-                        case PROPERTY_TYPE_RESOURCE:
                         case PROPERTY_TYPE_STRING:
                             true_val = g_strdup_printf ("\"%s\"", val);
                             g_free (val);
