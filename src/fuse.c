@@ -16,7 +16,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
 #include "core.h"
 #include "hierarchy.h"
 #include "gfuse-loop.h"
@@ -953,7 +952,7 @@ static void usage ()
 "    -V   --version         print version\n"
 "\n"
 "FSter options:\n"
-"   -c FILE                 specify a configuration file\n"
+"   -c FILE                 specify a configuration file (default " DEFAULT_CONFIG_FILE ")\n"
 "\n");
 }
 
@@ -977,7 +976,7 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
             break;
 
         case KEY_VERSION:
-            printf ("FSter version " FSTER_VERSION "\n");
+            printf ("FSter version " VERSION "\n");
             exit (0);
             break;
 
@@ -1017,7 +1016,7 @@ int main (int argc, char *argv [])
     umask (0);
     g_type_init ();
     g_thread_init (NULL);
-    dbus_g_thread_init ();
+    g_log_set_always_fatal (G_LOG_LEVEL_CRITICAL);
 
     memset (&Config, 0, sizeof (Config));
 

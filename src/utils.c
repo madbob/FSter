@@ -88,3 +88,66 @@ void create_file (gchar *path)
     else
         g_warning ("Unable to touch new file in %s\n", path);
 }
+
+GVariant* execute_query (gchar *query, GError **error)
+{
+    GVariant *ret;
+
+    g_message ("Executing query: %s\n", query);
+
+    ret = g_dbus_connection_call_sync (
+            g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL),
+            "org.freedesktop.Tracker1",
+            "/org/freedesktop/Tracker1/Resources",
+            "org.freedesktop.Tracker1.Resources",
+            "SparqlQuery",
+            g_variant_new ("(s)", query),
+            G_VARIANT_TYPE ("(aas)"),
+            G_DBUS_CALL_FLAGS_NONE,
+            -1,
+            NULL,
+            error);
+
+    return ret;
+}
+
+void execute_update (gchar *query, GError **error)
+{
+    GVariant *ret;
+
+    ret = g_dbus_connection_call_sync (
+            g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL),
+            "org.freedesktop.Tracker1",
+            "/org/freedesktop/Tracker1/Resources",
+            "org.freedesktop.Tracker1.Resources",
+            "SparqlUpdate",
+            g_variant_new ("(s)", query),
+            NULL,
+            G_DBUS_CALL_FLAGS_NONE,
+            -1,
+            NULL,
+            error);
+
+    g_object_unref (ret);
+}
+
+GVariant* execute_update_blank (gchar *query, GError **error)
+{
+    GVariant *ret;
+
+    ret = g_dbus_connection_call_sync (
+            g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL),
+            "org.freedesktop.Tracker1",
+            "/org/freedesktop/Tracker1/Resources",
+            "org.freedesktop.Tracker1.Resources",
+            "SparqlUpdateBlank",
+            g_variant_new ("(s)", query),
+            G_VARIANT_TYPE ("(aaa{ss})"),
+            G_DBUS_CALL_FLAGS_NONE,
+            -1,
+            NULL,
+            error);
+
+    return ret;
+}
+

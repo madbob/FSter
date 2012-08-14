@@ -26,8 +26,4 @@
 #include <fuse.h>
 #include <fuse_opt.h>
 
-#include <dbus/dbus-glib.h>
-
-#include <libtracker-client/tracker-client.h>
-
 #endif

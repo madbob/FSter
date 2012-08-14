@@ -22,3 +22,7 @@ void                easy_list_free                          (GList *list);
 gchar*              from_glist_to_string                    (GList *strings, const gchar *separator, gboolean free_list);
 void                check_and_create_folder                 (gchar *path);
 void                create_file                             (gchar *path);
+GVariant*           execute_query                           (gchar *query, GError **error);
+void                execute_update                          (gchar *query, GError **error);
+GVariant*           execute_update_blank                    (gchar *query, GError **error);
+

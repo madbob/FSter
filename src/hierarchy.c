@@ -16,7 +16,6 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "config.h"
 #include "hierarchy.h"
 #include "property-handler.h"
 #include "utils.h"
@@ -26,7 +25,6 @@
 static GList                            *LoadedContentsPlugins      = NULL;
 static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
-static TrackerClient                    *TrackerRef                 = NULL;
 static GHashTable                       *Params                     = NULL;
 
 static void create_dummy_references ()
@@ -50,7 +48,7 @@ static void load_plugins ()
     GType (*plugin_registrar) ();
     struct dirent **namelist;
 
-    path = g_build_filename (INSTALLDIR, "lib/fster/plugins", NULL);
+    path = PLUGIN_DIR;
 
     if (access (path, F_OK) != 0) {
         g_warning ("Unable to access contents plugin folder, expected in %s", path);
@@ -61,14 +59,15 @@ static void load_plugins ()
         for (i = 0; i < n; i++) {
             if (g_str_has_suffix (namelist [i]->d_name, ".so") == TRUE) {
                 plug_path = g_build_filename (path, namelist [i]->d_name, NULL);
-                plug_handler = dlopen (plug_path, RTLD_LAZY);
-                g_free (plug_path);
+                plug_handler = dlopen (plug_path, RTLD_LAZY | RTLD_GLOBAL);
 
                 if (plug_handler == NULL) {
                     g_warning ("Unable to open module in %s", plug_path);
+                    g_free (plug_path);
                     continue;
                 }
 
+                g_free (plug_path);
                 plugin_registrar = dlsym (plug_handler, "load_contents_plugin_type");
                 LoadedContentsPlugins = g_list_prepend (LoadedContentsPlugins, g_object_new (plugin_registrar (), NULL));
                 // dlclose (plug_handler);
@@ -79,8 +78,6 @@ static void load_plugins ()
 
         free (namelist);
     }
-
-    g_free (path);
 }
 
 void build_hierarchy_tree_from_xml (xmlDocPtr doc)
@@ -96,7 +93,6 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
         return;
     }
 
-    TrackerRef = tracker_client_new (0, G_MAXINT);
     properties_pool_init ();
     load_plugins ();
     saving_set = FALSE;
@@ -117,6 +113,11 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
                 saving_set = TRUE;
             }
         }
+        else if (strcmp ((gchar*) node->name, "comment") == 0) {
+            /*
+                dummy
+            */
+        }
         else {
             g_warning ("Error: unrecognized tag '%s'", (gchar*) node->name);
         }
@@ -134,7 +135,6 @@ void destroy_hierarchy_tree ()
     g_object_unref (Cache);
     g_object_unref (ExposingTree);
     hierarchy_node_set_save_path (NULL);
-    g_object_unref (get_tracker_client ());
     properties_pool_finish ();
 }
 
@@ -345,11 +345,6 @@ ContentsPlugin* retrieve_contents_plugin (gchar *name)
     }
 
     return plug;
-}
-
-TrackerClient* get_tracker_client ()
-{
-    return TrackerRef;
 }
 
 NodesCache* get_cache_reference ()

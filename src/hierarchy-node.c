@@ -1231,24 +1231,29 @@ static gchar* build_sparql_query (gchar *selection, gchar to_get, GList *stateme
     return g_string_free (query, FALSE);
 }
 
-static GList* build_items (HierarchyNode *node, ItemHandler *parent, GPtrArray *data, GList *required)
+static GList* build_items (HierarchyNode *node, ItemHandler *parent, GVariant *data, GList *required)
 {
-    register int i;
-    register int a;
-    gchar **values;
+    gchar *str;
     GList *required_iter;
     GList *items;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     ItemHandler *item;
 
     items = NULL;
+    iter = NULL;
+    subiter = NULL;
 
-    for (i = 0; i < data->len; i++) {
-        values = (gchar**) g_ptr_array_index (data, i);
+    g_variant_get (data, "(aas)", &iter);
 
-        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", values [0], NULL);
+    while (g_variant_iter_loop (iter, "as", &subiter)) {
+        str = NULL;
+        g_variant_iter_loop (subiter, "s", &str);
 
-        for (a = 1, required_iter = required; required_iter && *values != NULL; a++, required_iter = g_list_next (required_iter), values++)
-            item_handler_load_metadata (item, (gchar*) required_iter->data, values [a]);
+        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", str, NULL);
+
+        for (required_iter = required; required_iter && g_variant_iter_loop (subiter, "s", &str); required_iter = g_list_next (required_iter))
+            item_handler_load_metadata (item, (gchar*) required_iter->data, str);
 
         if (node->priv->expose_policy.contents_callback != NULL)
             g_object_set (item, "contents_handler", node->priv->expose_policy.contents_callback, NULL);
@@ -1279,7 +1284,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     GList *more_statements;
     GList *items;
     GList *required;
-    GPtrArray *response;
+    GVariant *response;
     GError *error;
     ValuedMetadataReference *meta_ref;
     MetadataDesc *prop;
@@ -1323,7 +1328,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     error = NULL;
     items = NULL;
 
-    response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
+    response = execute_query (sparql, &error);
     if (response == NULL) {
         printf ("%s\n", sparql);
         g_warning ("Unable to fetch items: %s", error->message);
@@ -1332,9 +1337,7 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     else {
         required = g_list_reverse (required);
         items = build_items (node, parent, response, required);
-
-        g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
-        g_ptr_array_free (response, TRUE);
+        g_variant_unref (response);
         g_list_free (required);
     }
 
@@ -1459,14 +1462,15 @@ static GList* collect_children_static (HierarchyNode *node, ItemHandler *parent)
 
 static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
 {
-    register int i;
     int values_offset;
-    gchar **values;
     gchar *sparql;
+    gchar *uri;
     GList *items;
     GList *statements;
     GList *more_statements;
-    GPtrArray *response;
+    GVariant *response;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     GError *error;
     ItemHandler *item;
     HierarchyNode *parent_node;
@@ -1495,24 +1499,29 @@ static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
     sparql = build_sparql_query ("SELECT DISTINCT(?a)", 'a', statements);
     error = NULL;
 
-    response = tracker_resources_sparql_query (get_tracker_client (), sparql, &error);
+    response = execute_query (sparql, &error);
     if (response == NULL) {
         g_warning ("Unable to fetch items: %s", error->message);
         g_error_free (error);
+        g_free (sparql);
         return NULL;
     }
 
     items = NULL;
+    iter = NULL;
+    subiter = NULL;
 
-    for (i = 0; i < response->len; i++) {
-        values = (gchar**) g_ptr_array_index (response, i);
+    g_variant_get (response, "(aas)", &iter);
+
+    while (g_variant_iter_loop (iter, "as", &subiter)) {
+        uri = NULL;
+        g_variant_iter_loop (subiter, "s", &uri);
         item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, NULL);
-        item_handler_load_metadata (item, node->priv->additional_option, values [0]);
+        item_handler_load_metadata (item, node->priv->additional_option, uri);
         items = g_list_prepend (items, item);
     }
 
-    g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
-    g_ptr_array_free (response, TRUE);
+    g_variant_unref (response);
     g_free (sparql);
 
     return g_list_reverse (items);
@@ -1661,7 +1670,14 @@ static gchar* collect_from_metadata_desc_list (gchar *formula, GList *components
                 case METADATA_HOLDER_PARENT:
                     reference = parent;
                     break;
+
+                default:
+                    reference = NULL;
+                    break;
             }
+
+            if (reference == NULL)
+                continue;
 
             if (component->means_subject == TRUE)
                 metadata_value = item_handler_get_subject (reference);
@@ -1709,6 +1725,8 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
 
     compilation = regcomp (&reg, policy->formula, REG_EXTENDED);
 
+    valid_extracted_senteces = 0;
+
     if (compilation != 0) {
         g_warning ("Unable to compile matching regular expression: %d", compilation);
     }
@@ -1718,7 +1736,6 @@ static void retrieve_metadata_by_name (HierarchyNode *node, ItemHandler *item, I
         }
         else {
             metadata_offset = policy->assigned_metadata;
-            valid_extracted_senteces = 0;
 
             /*
                 In matches[0] there is the whole string match, to skip

@@ -75,15 +75,22 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     gchar *stats;
     gchar *tys;
     gchar *query;
+    gchar *useless;
+    gchar *uri;
     va_list params;
     gpointer key;
     gpointer value;
     GList *statements;
     GList *types;
-    GPtrArray *results;
-    GPtrArray *back_id;
     GHashTable *table;
     GHashTableIter iter;
+    GVariant *results;
+    GVariant *rows;
+    GVariant *sub_value;
+    GVariant *sub_sub_value;
+    GVariantIter r_iter;
+    GVariantIter sub_iter;
+    GVariantIter sub_sub_iter;
     GError *error;
     Property *prop;
 
@@ -134,21 +141,38 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     g_free (stats);
 
     error = NULL;
-    results = tracker_resources_sparql_update_blank (get_tracker_client (), query, &error);
+    results = execute_update_blank (query, &error);
 
     if (error != NULL) {
         g_warning ("Error while saving metadata: %s", error->message);
         g_error_free (error);
     }
-    else if (results->len != 1) {
-        g_warning ("Error while saving metadata, no ID returned");
-    }
     else {
-        back_id = g_ptr_array_index (results, 0);
-        table = g_ptr_array_index (back_id, 0);
-        g_hash_table_iter_init (&iter, table);
-        g_hash_table_iter_next (&iter, NULL, &value);
-        item->priv->subject = g_strdup ((gchar*) value);
+        /*
+            To know how to iter a SparqlUpdateBlank response, cfr.
+            http://mail.gnome.org/archives/commits-list/2011-February/msg05384.html
+        */
+        g_variant_iter_init (&r_iter, results);
+
+        if ((rows = g_variant_iter_next_value (&r_iter))) {
+            g_variant_iter_init (&sub_iter, rows);
+
+            if ((sub_value = g_variant_iter_next_value (&sub_iter))) {
+                g_variant_iter_init (&sub_sub_iter, sub_value);
+
+                if ((sub_sub_value = g_variant_iter_next_value (&sub_sub_iter))) {
+                    useless = NULL;
+                    uri = NULL;
+                    g_variant_get (sub_sub_value, "{ss}", &useless, &uri);
+                    item->priv->subject = g_strdup (uri);
+                    g_variant_unref (sub_sub_value);
+                }
+
+                g_variant_unref (sub_value);
+            }
+
+            g_variant_unref (rows);
+        }
     }
 
     g_free (query);
@@ -495,30 +519,35 @@ const gchar* item_handler_exposed_name (ItemHandler *item)
 static const gchar* fetch_metadata (ItemHandler *item, const gchar *metadata)
 {
     gchar *query;
-    gchar **values;
     gchar *ret;
-    GPtrArray *response;
+    gchar *str;
+    GVariant *response;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     GError *error;
 
     ret = NULL;
     error = NULL;
     query = g_strdup_printf ("SELECT ?a WHERE { <%s> %s ?a }", item->priv->subject, metadata);
 
-    response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
+    response = execute_query (query, &error);
 
     if (response == NULL) {
         g_warning ("Unable to fetch metadata: %s", error->message);
         g_error_free (error);
     }
     else {
-        if (response->len > 0) {
-            values = (gchar**) g_ptr_array_index (response, 0);
-            ret = g_strdup (*values);
+        iter = NULL;
+        subiter = NULL;
+
+        g_variant_get (response, "(aas)", &iter);
+
+        if (g_variant_iter_loop (iter, "as", &subiter) && (str = NULL, g_variant_iter_loop (subiter, "s", &str))) {
+            ret = g_strdup (str);
             g_hash_table_insert (item->priv->metadata, g_strdup (metadata), ret);
-            g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
         }
 
-        g_ptr_array_free (response, TRUE);
+        g_variant_unref (response);
     }
 
     g_free (query);
@@ -616,33 +645,43 @@ const gchar* item_handler_get_metadata (ItemHandler *item, const gchar *metadata
  **/
 GList* item_handler_get_all_metadata (ItemHandler *item)
 {
-    register int i;
     gchar *query;
-    gchar **values;
+    gchar *predicate;
+    gchar *value;
     GList *ret;
-    GPtrArray *response;
+    GVariant *response;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     GError *error;
     Property *prop;
 
     ret = NULL;
     error = NULL;
     query = g_strdup_printf ("SELECT ?predicate ?value WHERE { <%s> ?predicate ?value }", item_handler_get_subject (item));
-    response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
+    response = execute_query (query, &error);
 
     if (response == NULL) {
         g_warning ("Unable to fetch all metadata: %s", error->message);
         g_error_free (error);
     }
     else {
-        for (i = 0; i < response->len; i++) {
-            values = (gchar**) g_ptr_array_index (response, i);
-            prop = properties_pool_get_by_uri (values [0]);
-            item_handler_load_metadata (item, property_get_name (prop), values [1]);
-            ret = g_list_prepend (ret, prop);
+        iter = NULL;
+        subiter = NULL;
+
+        g_variant_get (response, "(aas)", &iter);
+
+        while (g_variant_iter_loop (iter, "as", &subiter)) {
+            predicate = NULL;
+            value = NULL;
+
+            if (g_variant_iter_loop (subiter, "s", &predicate) && g_variant_iter_loop (subiter, "s", &value)) {
+                prop = properties_pool_get_by_uri (predicate);
+                item_handler_load_metadata (item, property_get_name (prop), value);
+                ret = g_list_prepend (ret, prop);
+            }
         }
 
-        g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
-        g_ptr_array_free (response, TRUE);
+        g_object_unref (response);
     }
 
     g_free (query);
@@ -811,7 +850,7 @@ void item_handler_remove (ItemHandler *item)
         error = NULL;
         id = item_handler_get_subject (item);
         query = g_strdup_printf ("DELETE { <%s> ?predicate ?value } WHERE { <%s> ?predicate ?value }", id, id);
-        tracker_resources_sparql_update (get_tracker_client (), query, &error);
+        execute_update (query, &error);
         g_free (query);
 
         if (error != NULL) {

@@ -38,7 +38,6 @@ ItemHandler*        verify_exposed_path_in_folder           (HierarchyNode *leve
 HierarchyNode*      node_at_path                            (const gchar *path);
 void                replace_hierarchy_node                  (ItemHandler *old_item, ItemHandler *new_item);
 
-TrackerClient*      get_tracker_client                      ();
 NodesCache*         get_cache_reference                     ();
 
 void                set_user_param                          (gchar *name, gchar *value);

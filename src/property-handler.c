@@ -34,10 +34,12 @@ static GHashTable   *properties     = NULL;
 
 void properties_pool_init ()
 {
-    register int i;
     gchar *query;
-    gchar **values;
-    GPtrArray *response;
+    gchar *uri;
+    gchar *prefix;
+    GVariant *response;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     GError *error;
 
     if (namespaces != NULL) {
@@ -50,7 +52,7 @@ void properties_pool_init ()
 
     query = g_strdup_printf ("SELECT ?s ?prefix WHERE { ?s a tracker:Namespace . ?s tracker:prefix ?prefix }");
     error = NULL;
-    response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
+    response = execute_query (query, &error);
     g_free (query);
 
     if (response == NULL) {
@@ -59,18 +61,21 @@ void properties_pool_init ()
         return;
     }
 
-    for (i = 0; i < response->len; i++) {
-        values = (gchar**) g_ptr_array_index (response, i);
-        g_hash_table_insert (namespaces, values [1], values [0]);
+    iter = NULL;
+    subiter = NULL;
+    g_variant_get (response, "(aas)", &iter);
 
-        /*
-            String are not freed here, are maintained in the hash table
-        */
+    while (g_variant_iter_loop (iter, "as", &subiter)) {
+        prefix = NULL;
+        uri = NULL;
 
-        g_free (values);
+        if (g_variant_iter_loop (subiter, "s", &uri) && g_variant_iter_loop (subiter, "s", &prefix)) {
+            printf ("%s - %s\n", prefix, uri);
+            g_hash_table_insert (namespaces, g_strdup (prefix), g_strdup (uri));
+        }
     }
 
-    g_ptr_array_free (response, TRUE);
+    g_variant_unref (response);
 }
 
 void properties_pool_finish ()
@@ -154,15 +159,17 @@ static Property* fetch_property (gchar *uri)
 {
     gchar *query;
     gchar *name;
-    gchar **values;
-    GPtrArray *response;
+    gchar *type;
+    GVariant *response;
+    GVariantIter *iter;
+    GVariantIter *subiter;
     GError *error;
     Property *prop;
     PROPERTY_DATATYPE data_type;
 
     error = NULL;
     query = g_strdup_printf ("SELECT ?range WHERE { <%s> rdfs:range ?range }", uri);
-    response = tracker_resources_sparql_query (get_tracker_client (), query, &error);
+    response = execute_query (query, &error);
     g_free (query);
 
     if (response == NULL) {
@@ -179,29 +186,37 @@ static Property* fetch_property (gchar *uri)
 
     property_set_uri (prop, uri);
 
-    values = (gchar**) g_ptr_array_index (response, 0);
+    iter = NULL;
+    subiter = NULL;
+    g_variant_get (response, "(aas)", &iter);
 
-    if (strcmp (values [0], XSD_STRING) == 0)
-        data_type = PROPERTY_TYPE_STRING;
-    else if (strcmp (values [0], XSD_BOOLEAN) == 0)
-        data_type = PROPERTY_TYPE_BOOLEAN;
-    else if (strcmp (values [0], XSD_INTEGER) == 0)
-        data_type = PROPERTY_TYPE_INTEGER;
-    else if (strcmp (values [0], XSD_DOUBLE) == 0)
-        data_type = PROPERTY_TYPE_DOUBLE;
-    else if (strcmp (values [0], XSD_DATE) == 0)
-        data_type = PROPERTY_TYPE_DATE;
-    else if (strcmp (values [0], XSD_DATETIME) == 0)
-        data_type = PROPERTY_TYPE_DATETIME;
-    else if (strcmp (values [0], XSD_CLASS) == 0)
-        data_type = PROPERTY_TYPE_CLASS;
-    else
-        data_type = PROPERTY_TYPE_RESOURCE;
+    if (g_variant_iter_loop (iter, "as", &subiter) && g_variant_iter_loop (subiter, "s", &type)) {
+        if (strcmp (type, XSD_STRING) == 0)
+            data_type = PROPERTY_TYPE_STRING;
+        else if (strcmp (type, XSD_BOOLEAN) == 0)
+            data_type = PROPERTY_TYPE_BOOLEAN;
+        else if (strcmp (type, XSD_INTEGER) == 0)
+            data_type = PROPERTY_TYPE_INTEGER;
+        else if (strcmp (type, XSD_DOUBLE) == 0)
+            data_type = PROPERTY_TYPE_DOUBLE;
+        else if (strcmp (type, XSD_DATE) == 0)
+            data_type = PROPERTY_TYPE_DATE;
+        else if (strcmp (type, XSD_DATETIME) == 0)
+            data_type = PROPERTY_TYPE_DATETIME;
+        else if (strcmp (type, XSD_CLASS) == 0)
+            data_type = PROPERTY_TYPE_CLASS;
+        else
+            data_type = PROPERTY_TYPE_RESOURCE;
 
-    g_ptr_array_foreach (response, (GFunc) g_strfreev, NULL);
-    g_ptr_array_free (response, TRUE);
+        property_set_datatype (prop, data_type);
+    }
 
-    property_set_datatype (prop, data_type);
+    if (iter != NULL)
+        g_variant_iter_free (iter);
+    if (subiter != NULL)
+        g_variant_iter_free (subiter);
+
+    g_variant_unref (response);
 
     g_hash_table_insert (properties, g_strdup (uri), prop);
     return prop;

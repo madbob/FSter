@@ -44,4 +44,6 @@
 #include <libxml/parser.h>
 #include <libxml/tree.h>
 
+#include "../config.h"
+
 #endif
