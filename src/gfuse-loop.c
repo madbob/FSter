@@ -1,4 +1,5 @@
 /*  Copyright (C) 2010 Itsme S.r.L.
+ *  Copyright (C) 2012 Roberto Guido <roberto.guido@linux.it>
  *
  *  This file is part of FSter
  *
