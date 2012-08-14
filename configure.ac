@@ -93,8 +93,7 @@ else
   CPPFLAGS="$CPPFLAGS -g -Wall"
 fi
 
-#plugindir='${libdir}/fster/plugins/'
-plugindir='/tmp/fster/plugins/'
+plugindir='${libdir}/fster/plugins/'
 AC_SUBST(plugindir)
 CFLAGS="$CFLAGS '-DPLUGIN_DIR=\"\$(plugindir)\"'"
 

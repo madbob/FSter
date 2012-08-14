@@ -94,8 +94,6 @@ GVariant* execute_query (gchar *query, GError **error)
 {
     GVariant *ret;
 
-    g_message ("Executing query: %s\n", query);
-
     ret = g_dbus_connection_call_sync (
             g_bus_get_sync (G_BUS_TYPE_SESSION, NULL, NULL),
             "org.freedesktop.Tracker1",
