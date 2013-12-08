@@ -67,7 +67,8 @@
 enum {
     KEY_HELP,
     KEY_CONFIGFILE,
-    KEY_VERSION
+    KEY_VERSION,
+    KEY_USER_PARAMETER
 };
 
 static struct fuse_opt fster_opts [] = {
@@ -76,6 +77,7 @@ static struct fuse_opt fster_opts [] = {
     FUSE_OPT_KEY ("-c ",        KEY_CONFIGFILE),
     FUSE_OPT_KEY ("-V",         KEY_VERSION),
     FUSE_OPT_KEY ("--version",  KEY_VERSION),
+    FUSE_OPT_KEY ("-p ",        KEY_USER_PARAMETER),
     FUSE_OPT_END
 };
 
@@ -129,6 +131,8 @@ static void free_conf ()
 {
     if (Config.conf_file != NULL)
         g_free (Config.conf_file);
+
+    set_user_param (NULL, NULL);
 }
 
 static inline void set_permissions ()
@@ -954,14 +958,14 @@ static void usage ()
 "\n"
 "FSter options:\n"
 "   -c FILE                 specify a configuration file (default " DEFAULT_CONFIG_FILE ")\n"
+"   -p NAME=VALUE           specify value for a user parameter found in configuration file\n"
 "\n");
 }
 
 static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_args *outargs)
 {
-    int ret;
-    static gboolean is_param = FALSE;
-    static gchar *param_name = NULL;
+    gchar *param_name = NULL;
+    gchar *param_value = NULL;
 
     switch (key) {
         case KEY_HELP:
@@ -981,24 +985,22 @@ static int fster_opt_proc (void *data, const char *arg, int key, struct fuse_arg
             exit (0);
             break;
 
+        case KEY_USER_PARAMETER:
+            if (strchr (arg + 2, '=') == NULL) {
+                g_warning ("Malformed parameter, should be name=value");
+                free_conf ();
+                exit (1);
+            }
+
+            param_name = g_strdup (arg + 2);
+            param_value = strchr (param_name, '=');
+            *param_value = '\0';
+            param_value = g_strdup (param_value + 1);
+            set_user_param (param_name, param_value);
+            break;
+
         default:
-            if (is_param == TRUE && param_name != NULL) {
-                set_user_param (param_name, g_strdup (arg));
-                param_name = NULL;
-                ret = 0;
-            }
-
-            else if (strncmp (arg, "-p", 2) == 0) {
-                is_param = TRUE;
-                param_name = g_strdup (arg + 2);
-                ret = 0;
-            }
-
-            else {
-                ret = 1;
-            }
-
-            return ret;
+            return 1;
             break;
     }
 
