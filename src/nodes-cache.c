@@ -23,7 +23,7 @@
 
 struct _NodesCachePrivate {
     GHashTable          *bag;
-    GStaticRWLock       lock;
+    GRWLock             lock;
 };
 
 G_DEFINE_TYPE (NodesCache, nodes_cache, G_TYPE_OBJECT);
@@ -34,7 +34,7 @@ static void nodes_cache_finalize (GObject *cache)
 
     ret = NODES_CACHE (cache);
     g_hash_table_destroy (ret->priv->bag);
-    g_static_rw_lock_free (&(ret->priv->lock));
+    g_rw_lock_clear (&(ret->priv->lock));
 }
 
 static void nodes_cache_class_init (NodesCacheClass *klass)
@@ -52,7 +52,7 @@ static void nodes_cache_init (NodesCache *cache)
     cache->priv = NODES_CACHE_GET_PRIVATE (cache);
     memset (cache->priv, 0, sizeof (NodesCachePrivate));
     cache->priv->bag = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_object_unref);
-    g_static_rw_lock_init (&(cache->priv->lock));
+    g_rw_lock_init (&(cache->priv->lock));
 }
 
 /**
@@ -96,9 +96,9 @@ ItemHandler* nodes_cache_get_by_path (NodesCache *cache, const gchar *path)
 {
     ItemHandler *ret;
 
-    g_static_rw_lock_reader_lock (&(cache->priv->lock));
+    g_rw_lock_reader_lock (&(cache->priv->lock));
     ret = internal_get_by_path (cache, path);
-    g_static_rw_lock_reader_unlock (&(cache->priv->lock));
+    g_rw_lock_reader_unlock (&(cache->priv->lock));
     return ret;
 }
 
@@ -116,12 +116,12 @@ ItemHandler* nodes_cache_get_by_path (NodesCache *cache, const gchar *path)
  **/
 void nodes_cache_set_by_path (NodesCache *cache, ItemHandler *item, const gchar *path)
 {
-    g_static_rw_lock_writer_lock (&(cache->priv->lock));
+    g_rw_lock_writer_lock (&(cache->priv->lock));
 
     if (internal_get_by_path (cache, path) == NULL)
         g_hash_table_insert (cache->priv->bag, (gchar*) path, item);
 
-    g_static_rw_lock_writer_unlock (&(cache->priv->lock));
+    g_rw_lock_writer_unlock (&(cache->priv->lock));
 }
 
 /**

@@ -1015,8 +1015,6 @@ int main (int argc, char *argv [])
     struct fuse_args args = FUSE_ARGS_INIT (argc, argv);
 
     umask (0);
-    g_type_init ();
-    g_thread_init (NULL);
     g_log_set_always_fatal (G_LOG_LEVEL_CRITICAL);
 
     memset (&Config, 0, sizeof (Config));
