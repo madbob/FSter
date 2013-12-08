@@ -334,7 +334,7 @@ ${metadato} per inserire il valore del metadato definito
           </xs:attribute>
           <xs:attribute name="operator" type="xs:string" use="optional">
             <xs:annotation>
-              <xs:documentation>operatore (is, isnot) </xs:documentation>
+              <xs:documentation>operatore (is, isnot, minor, major)</xs:documentation>
             </xs:annotation>
           </xs:attribute>
         </xs:complexType>

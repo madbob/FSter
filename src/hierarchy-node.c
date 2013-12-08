@@ -37,6 +37,8 @@ gchar       *SavingPath                 = NULL;
 typedef enum {
     METADATA_OPERATOR_IS_EQUAL,
     METADATA_OPERATOR_IS_NOT_EQUAL,
+    METADATA_OPERATOR_IS_MINOR,
+    METADATA_OPERATOR_IS_MAJOR,
 } METADATA_OPERATOR;
 
 typedef enum {
@@ -412,6 +414,10 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
             ref->operator = METADATA_OPERATOR_IS_EQUAL;
         else if (strcmp (str, "isnot") == 0)
             ref->operator = METADATA_OPERATOR_IS_NOT_EQUAL;
+        else if (strcmp (str, "minor") == 0)
+            ref->operator = METADATA_OPERATOR_IS_MINOR;
+        else if (strcmp (str, "major") == 0)
+            ref->operator = METADATA_OPERATOR_IS_MAJOR;
         xmlFree (str);
     }
     else {
@@ -964,6 +970,27 @@ static gchar* compose_value_from_many_metadata (ItemHandler *parent, GList *meta
     return g_string_free (str, FALSE);
 }
 
+static const gchar* common_operator (int name)
+{
+    switch (name) {
+        case METADATA_OPERATOR_IS_EQUAL:
+            return "=";
+            break;
+        case METADATA_OPERATOR_IS_NOT_EQUAL:
+            return "!=";
+            break;
+        case METADATA_OPERATOR_IS_MINOR:
+            return "<";
+            break;
+        case METADATA_OPERATOR_IS_MAJOR:
+            return ">";
+            break;
+    }
+
+    g_warning ("Unknow operator type");
+    return "";
+}
+
 static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *parent, int *offset)
 {
     int value_offset;
@@ -972,6 +999,7 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     gchar *val;
     gchar *true_val;
     const gchar *meta_name;
+    const gchar *op;
     GList *iter;
     GList *statements;
     ValuedMetadataReference *meta_ref;
@@ -1024,7 +1052,12 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                         }
                     }
                 }
-                else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL) {
+                else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL ||
+                         meta_ref->operator == METADATA_OPERATOR_IS_MINOR ||
+                         meta_ref->operator == METADATA_OPERATOR_IS_MAJOR) {
+
+                    op = common_operator (meta_ref->operator);
+
                     if (meta_ref->metadata.means_subject == TRUE) {
                         if (component->means_subject == TRUE) {
                             /**
@@ -1036,20 +1069,20 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             stat = NULL;
                         }
                         else {
-                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
-                                                    property_get_name (component->metadata), value_offset, value_offset);
+                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s ?item )",
+                                                    property_get_name (component->metadata), value_offset, value_offset, op);
                         }
                     }
                     else if (meta_ref->metadata.means_subject == FALSE) {
                         if (component->means_subject == TRUE) {
-                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != ?item )",
-                                                    property_get_name (meta_ref->metadata.metadata), value_offset, value_offset);
+                            stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s ?item )",
+                                                    property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, op);
                         }
                         else {
-                            stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( ?var%d != ?var%d )",
+                            stat = g_strdup_printf ("?item %s ?var%d . ?item %s ?var%d . FILTER ( ?var%d %s ?var%d )",
                                                     property_get_name (meta_ref->metadata.metadata), value_offset,
                                                     property_get_name (component->metadata), value_offset + 1,
-                                                    value_offset, value_offset + 1);
+                                                    value_offset, op, value_offset + 1);
                             value_offset += 2;
                         }
                     }
@@ -1084,18 +1117,7 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                 meta_name = property_get_name (component->metadata);
 
                                 if (item_handler_contains_metadata (parent, meta_name)) {
-                                    val = g_strdup (item_handler_get_metadata (parent, meta_name));
-
-                                    switch (property_get_datatype (meta_ref->metadata.metadata)) {
-                                        case PROPERTY_TYPE_STRING:
-                                            true_val = g_strdup_printf ("\"%s\"", val);
-                                            g_free (val);
-                                            val = true_val;
-                                            break;
-
-                                        default:
-                                            break;
-                                    }
+                                    val = property_format_value (meta_ref->metadata.metadata, item_handler_get_metadata (parent, meta_name));
 
                                     stat = g_strdup_printf ("?item %s %s",
                                                             property_get_name (meta_ref->metadata.metadata), val);
@@ -1109,7 +1131,12 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             }
                         }
                     }
-                    else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL) {
+                    else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL ||
+                             meta_ref->operator == METADATA_OPERATOR_IS_MINOR ||
+                             meta_ref->operator == METADATA_OPERATOR_IS_MAJOR) {
+
+                        op = common_operator (meta_ref->operator);
+
                         if (meta_ref->metadata.means_subject == TRUE) {
                             if (component->means_subject == TRUE) {
                                 /**
@@ -1118,31 +1145,31 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                 stat = NULL;
                             }
                             else {
-                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s \"%s\" )",
                                                         property_get_name (component->metadata), value_offset,
-                                                        value_offset, item_handler_get_subject (parent));
+                                                        value_offset, op, item_handler_get_subject (parent));
                             }
                         }
                         else {
                             if (component->means_subject == TRUE) {
-                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s \"%s\" )",
                                                         property_get_name (meta_ref->metadata.metadata), value_offset,
-                                                        value_offset, item_handler_get_subject (parent));
+                                                        value_offset, op, item_handler_get_subject (parent));
                             }
                             else {
                                 meta_name = property_get_name (component->metadata);
 
                                 if (item_handler_contains_metadata (parent, meta_name)) {
-                                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != \"%s\" )",
+                                    stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s \"%s\" )",
                                                             property_get_name (meta_ref->metadata.metadata), value_offset,
-                                                            value_offset, item_handler_get_metadata (parent, meta_name));
+                                                            value_offset, op, item_handler_get_metadata (parent, meta_name));
                                     value_offset++;
                                 }
                                 else {
-                                    stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( ?var%d != ?var%d )",
+                                    stat = g_strdup_printf ("?item %s ?var%d . <%s> %s ?var%d . FILTER ( ?var%d %s ?var%d )",
                                                             property_get_name (meta_ref->metadata.metadata), value_offset,
                                                             item_handler_get_subject (parent), meta_name, value_offset + 1,
-                                                            value_offset, value_offset + 1);
+                                                            value_offset, op, value_offset + 1);
                                     value_offset += 2;
                                 }
                             }
@@ -1168,30 +1195,28 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
             if (val != NULL) {
                 if (meta_ref->metadata.means_subject == TRUE) {
                     if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
-                        stat = g_strdup_printf ("?item a rdfs:Resource filter (?subject = <%s>)", val);
+                        stat = g_strdup_printf ("?item a rdfs:Resource FILTER ( ?subject = <%s> )", val);
                     }
-                    else {
-                        stat = g_strdup_printf ("?item a rdfs:Resource filter (?subject != <%s>)", val);
+                    else if (meta_ref->operator == METADATA_OPERATOR_IS_NOT_EQUAL) {
+                        stat = g_strdup_printf ("?item a rdfs:Resource FILTER ( ?subject != <%s> )", val);
                     }
+
+                    /**
+                        TODO    Do it has any meaning using METADATA_OPERATOR_IS_MINOR and METADATA_OPERATOR_IS_MAJOR?
+                    */
                 }
                 else {
-                    switch (property_get_datatype (meta_ref->metadata.metadata)) {
-                        case PROPERTY_TYPE_STRING:
-                            true_val = g_strdup_printf ("\"%s\"", val);
-                            g_free (val);
-                            val = true_val;
-                            break;
-
-                        default:
-                            break;
-                    }
+                    true_val = property_format_value (meta_ref->metadata.metadata, val);
+                    g_free (val);
+                    val = true_val;
 
                     if (meta_ref->operator == METADATA_OPERATOR_IS_EQUAL) {
                         stat = g_strdup_printf ("?item %s %s", property_get_name (meta_ref->metadata.metadata), val);
                     }
                     else {
-                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d != %s )",
-                                                property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, val);
+                        op = common_operator (meta_ref->operator);
+                        stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s %s )",
+                                                property_get_name (meta_ref->metadata.metadata), value_offset, value_offset, op, val);
                         value_offset++;
                     }
                 }
