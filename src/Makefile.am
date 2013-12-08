@@ -14,6 +14,7 @@ common_cflags = \
 
 common_ldadd = \
 	$(FSTER_LIBS) \
+	-ldl
 	$(NULL)
 
 bin_PROGRAMS = fster
