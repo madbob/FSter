@@ -739,9 +739,6 @@ static gboolean parse_exposing_policy (HierarchyNode *this, ExposePolicy *exposi
         else if (strcmp ((gchar*) node->name, "inheritable_conditions") == 0) {
             ret = parse_conditions_policy (&(this->priv->child_policy), node);
         }
-        else if (strcmp ((gchar*) node->name, "comment") == 0) {
-            continue;
-        }
         else {
             g_warning ("Unrecognized tag %s", (gchar*) node->name);
         }
@@ -1037,11 +1034,21 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                             stat = NULL;
                         }
                         else {
+                            /*
+                                /subject = self's metadata
+                                is the same thing than
+                                self's metadata = /subject
+                            */
                             stat = g_strdup_printf ("?item %s ?item", property_get_name (component->metadata));
                         }
                     }
                     else if (meta_ref->metadata.means_subject == FALSE) {
                         if (component->means_subject == TRUE) {
+                            /*
+                                /subject = self's metadata
+                                is the same thing than
+                                self's metadata = /subject
+                            */
                             stat = g_strdup_printf ("?item %s ?item", property_get_name (meta_ref->metadata.metadata));
                         }
                         else {
@@ -1102,9 +1109,9 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
                                 stat = NULL;
                             }
                             else {
-                                stat = g_strdup_printf ("?item %s <%s>",
-                                                        property_get_name (component->metadata),
-                                                        item_handler_get_subject (parent));
+                                stat = g_strdup_printf ("<%s> %s ?item",
+                                                        item_handler_get_subject (parent),
+                                                        property_get_name (component->metadata));
                             }
                         }
                         else if (meta_ref->metadata.means_subject == FALSE) {
@@ -1542,7 +1549,13 @@ static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
     while (g_variant_iter_loop (iter, "as", &subiter)) {
         uri = NULL;
         g_variant_iter_loop (subiter, "s", &uri);
-        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, NULL);
+
+        item = g_object_new (ITEM_HANDLER_TYPE,
+                             "type", node->priv->type,
+                             "parent", parent,
+                             "node", node,
+                             "exposed_name", uri, NULL);
+
         item_handler_load_metadata (item, node->priv->additional_option, uri);
         items = g_list_prepend (items, item);
     }

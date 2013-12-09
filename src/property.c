@@ -123,10 +123,13 @@ gchar* property_format_value (Property *property, const gchar *value)
             g_date_free (d);
             break;
 
+        case PROPERTY_TYPE_RESOURCE:
+            ret = g_strdup_printf ("<%s>", value);
+            break;
+
         case PROPERTY_TYPE_BOOLEAN:
         case PROPERTY_TYPE_INTEGER:
         case PROPERTY_TYPE_DOUBLE:
-        case PROPERTY_TYPE_RESOURCE:
         default:
             ret = g_strdup (value);
             break;

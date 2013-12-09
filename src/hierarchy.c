@@ -114,11 +114,6 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
                 saving_set = TRUE;
             }
         }
-        else if (strcmp ((gchar*) node->name, "comment") == 0) {
-            /*
-                dummy
-            */
-        }
         else {
             g_warning ("Error: unrecognized tag '%s'", (gchar*) node->name);
         }
@@ -227,7 +222,7 @@ ItemHandler* verify_exposed_path (const gchar *path)
     }
     else {
         if (ExposingTree == NULL) {
-            g_warning ("Warning: there is not an exposing hierarchy");
+            g_warning ("Warning: there is not an exposing hierarchy for item handler");
             return NULL;
         }
 
@@ -278,7 +273,7 @@ HierarchyNode* node_at_path (const gchar *path)
     }
     else {
         if (ExposingTree == NULL) {
-            g_warning ("Warning: there is not an exposing hierarchy");
+            g_warning ("Warning: there is not an exposing hierarchy for hierarchy node");
             return NULL;
         }
 
