@@ -861,14 +861,58 @@ static int ifs_fsync (const char *path, int isdatasync, struct fuse_file_info *f
     return fsync (item->fd);
 }
 
+static gchar* read_configuration (int *fsize)
+{
+    gchar *offset;
+    gchar *string;
+    gchar *comment_start;
+    gchar *comment_end;
+    FILE *f;
+
+    f = fopen (Config.conf_file, "rb");
+    fseek (f, 0, SEEK_END);
+    *fsize = (int) ftell (f);
+    fseek (f, 0, SEEK_SET);
+
+    string = g_malloc (*fsize + 1);
+    fread (string, *fsize, 1, f);
+    fclose (f);
+
+    string [*fsize] = 0;
+
+    offset = string;
+
+    while (TRUE) {
+        comment_start = strstr (offset, "<!--");
+        if (comment_start == NULL)
+            break;
+
+        comment_end = strstr (comment_start, "-->");
+        if (comment_end == NULL)
+            break;
+
+        while (comment_start != comment_end + 3) {
+            *comment_start = ' ';
+            comment_start++;
+        }
+
+        offset = comment_start;
+    }
+
+    return string;
+}
+
 /**
     Provides to parse a configuration file
 */
 static void check_configuration ()
 {
+    int fsize;
+    gchar *file;
     xmlDocPtr doc;
 
-    doc = xmlReadFile (Config.conf_file, NULL, XML_PARSE_NOBLANKS);
+    file = read_configuration (&fsize);
+    doc = xmlReadMemory (file, fsize, NULL, NULL, XML_PARSE_NOBLANKS);
 
     if (doc == NULL) {
         g_warning ("Unable to read configuration");
@@ -877,6 +921,8 @@ static void check_configuration ()
         build_hierarchy_tree_from_xml (doc);
         xmlFreeDoc (doc);
     }
+
+    g_free (file);
 }
 
 /**
