@@ -101,6 +101,8 @@ gchar* property_format_value (Property *property, const gchar *value)
     gchar *ret;
     GDate *d;
     struct tm tm;
+    GRegex *subject_format;
+    gboolean subject_already_formatted;
 
     ret = NULL;
 
@@ -124,8 +126,14 @@ gchar* property_format_value (Property *property, const gchar *value)
             break;
 
         case PROPERTY_TYPE_RESOURCE:
-            ret = g_strdup_printf ("<%s>", value);
-            break;
+	    subject_format = g_regex_new ("<.*>", 0, 0, NULL);
+	    subject_already_formatted = g_regex_match(subject_format, value, 0, NULL);
+	    if(!subject_already_formatted)
+              ret = g_strdup_printf ("<%s>", value);
+	    else
+	      ret = g_strdup (value);
+	    g_free(subject_format);
+	    break;
 
         case PROPERTY_TYPE_BOOLEAN:
         case PROPERTY_TYPE_INTEGER:

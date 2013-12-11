@@ -112,6 +112,11 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                     statements = g_list_prepend (statements, stats);
                     break;
 
+	        case PROPERTY_TYPE_RESOURCE:
+                    stats = g_strdup_printf ("%s <%s>", (gchar*) key, (gchar*) value);
+                    statements = g_list_prepend (statements, stats);
+                    break;
+
                 default:
                     stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
                     statements = g_list_prepend (statements, stats);
@@ -132,6 +137,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     if (types == NULL) {
         query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s }", stats);
+
     }
     else {
         tys = from_glist_to_string (types, " ; ", TRUE);
@@ -143,6 +149,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     error = NULL;
     results = execute_update_blank (query, &error);
+	
 
     if (error != NULL) {
         g_warning ("Error while saving metadata: %s", error->message);
@@ -164,7 +171,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                 if ((sub_sub_value = g_variant_iter_next_value (&sub_sub_iter))) {
                     useless = NULL;
                     uri = NULL;
-                    g_variant_get (sub_sub_value, "{ss}", &useless, &uri);
+                    g_variant_get (sub_sub_value, "a{ss}", &useless, &uri);
                     item->priv->subject = g_strdup (uri);
                     g_variant_unref (sub_sub_value);
                 }
