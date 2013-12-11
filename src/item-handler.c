@@ -94,7 +94,10 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     GVariantIter sub_sub_iter;
     GError *error;
     Property *prop;
+    GRegex *query_syntax;
+    gboolean is_query;
 
+    
     statements = NULL;
     types = NULL;
     va_start (params, item);
@@ -113,13 +116,20 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                     break;
 
 	        case PROPERTY_TYPE_RESOURCE:
-                    stats = g_strdup_printf ("%s <%s>", (gchar*) key, (gchar*) value);
-                    statements = g_list_prepend (statements, stats);
+		    //FIXME supporting naif config in a better way
+		    query_syntax = g_regex_new ("\\?.*", 0, 0, NULL);
+		    is_query = g_regex_match(query_syntax, (gchar*) value, 0, NULL);
+		    if(!is_query)
+                       stats = g_strdup_printf ("%s <%s>", (gchar*) key, (gchar*) value);
+		    else
+		       stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
+		    statements = g_list_prepend (statements, stats);
+		    g_regex_unref (query_syntax);
                     break;
 
                 default:
-                    stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
-                    statements = g_list_prepend (statements, stats);
+		    stats = g_strdup_printf ("%s %s", (gchar*) key, (gchar*) value);
+		    statements = g_list_prepend (statements, stats);
                     break;
             }
         }
@@ -149,7 +159,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     error = NULL;
     results = execute_update_blank (query, &error);
-	
 
     if (error != NULL) {
         g_warning ("Error while saving metadata: %s", error->message);
