@@ -127,7 +127,7 @@ void execute_update (gchar *query, GError **error)
             NULL,
             error);
 
-    g_object_unref (ret);
+    g_variant_unref (ret);
 }
 
 GVariant* execute_update_blank (gchar *query, GError **error)

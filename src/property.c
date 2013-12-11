@@ -132,7 +132,7 @@ gchar* property_format_value (Property *property, const gchar *value)
               ret = g_strdup_printf ("<%s>", value);
 	    else
 	      ret = g_strdup (value);
-	    g_free(subject_format);
+	    g_regex_unref (subject_format);
 	    break;
 
         case PROPERTY_TYPE_BOOLEAN:
