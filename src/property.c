@@ -112,28 +112,43 @@ gchar* property_format_value (Property *property, const gchar *value)
             break;
 
         case PROPERTY_TYPE_DATETIME:
-            d = g_date_new ();
-            g_date_set_parse (d, value);
+            subject_format = g_regex_new ("[1-9][0-9]{3}-.+T[^.]+(Z|[+-].+)", 0, 0, NULL);
+            subject_already_formatted = g_regex_match (subject_format, value, 0, NULL);
 
-            if (g_date_valid (d) == TRUE) {
-                g_date_to_struct_tm (d, &tm);
-                ret = g_strdup_printf ("\"%04d-%02d-%02dT%02d:%02d:%02dZ\"",
-                                       tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
-                                       tm.tm_hour, tm.tm_min, tm.tm_sec);
+            if (subject_already_formatted == FALSE) {
+                d = g_date_new ();
+                g_date_set_parse (d, value);
+
+                if (g_date_valid (d) == TRUE) {
+                    g_date_to_struct_tm (d, &tm);
+                    ret = g_strdup_printf ("\"%04d-%02d-%02dT%02d:%02d:%02dZ\"",
+                                           tm.tm_year + 1900, tm.tm_mon + 1, tm.tm_mday,
+                                           tm.tm_hour, tm.tm_min, tm.tm_sec);
+                }
+                else {
+                    g_warning ("Unrecognized date format: %s", value);
+                }
+
+                g_date_free (d);
+            }
+            else {
+                ret = g_strdup_printf ("\"%s\"", value);
             }
 
-            g_date_free (d);
+            g_regex_unref (subject_format);
             break;
 
         case PROPERTY_TYPE_RESOURCE:
-	    subject_format = g_regex_new ("<.*>", 0, 0, NULL);
-	    subject_already_formatted = g_regex_match(subject_format, value, 0, NULL);
-	    if(!subject_already_formatted)
-              ret = g_strdup_printf ("<%s>", value);
-	    else
-	      ret = g_strdup (value);
-	    g_free(subject_format);
-	    break;
+            subject_format = g_regex_new ("<.*>", 0, 0, NULL);
+            subject_already_formatted = g_regex_match (subject_format, value, 0, NULL);
+
+            if (!subject_already_formatted)
+                ret = g_strdup_printf ("<%s>", value);
+            else
+                ret = g_strdup (value);
+
+            g_regex_unref (subject_format);
+            break;
 
         case PROPERTY_TYPE_BOOLEAN:
         case PROPERTY_TYPE_INTEGER:

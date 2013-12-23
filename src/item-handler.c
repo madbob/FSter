@@ -112,7 +112,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
                     statements = g_list_prepend (statements, stats);
                     break;
 
-	        case PROPERTY_TYPE_RESOURCE:
+                case PROPERTY_TYPE_RESOURCE:
                     stats = g_strdup_printf ("%s <%s>", (gchar*) key, (gchar*) value);
                     statements = g_list_prepend (statements, stats);
                     break;
@@ -137,7 +137,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     if (types == NULL) {
         query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s }", stats);
-
     }
     else {
         tys = from_glist_to_string (types, " ; ", TRUE);
@@ -149,7 +148,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 
     error = NULL;
     results = execute_update_blank (query, &error);
-	
 
     if (error != NULL) {
         g_warning ("Error while saving metadata: %s", error->message);
@@ -689,7 +687,7 @@ GList* item_handler_get_all_metadata (ItemHandler *item)
             }
         }
 
-        g_object_unref (response);
+        g_variant_unref (response);
     }
 
     g_free (query);

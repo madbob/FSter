@@ -870,11 +870,7 @@ static gboolean parse_exposing_nodes (HierarchyNode *this, xmlNode *root)
                 ret = parse_exposing_policy (this, &(this->priv->expose_policy), node);
             }
             else {
-                /**
-                    TODO    Improve error reporting, with suggestions about
-                            potential reasons of the wrong configuration
-                */
-                g_warning ("Unrecognized tag %s in %s", (gchar*) node->name, this->priv->name);
+                g_warning ("Unrecognized tag %s in %s. Expected <visualization_policy> or <editing_policy>", (gchar*) node->name, this->priv->name);
                 ret = FALSE;
             }
         }
@@ -1067,13 +1063,15 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
 
                     if (meta_ref->metadata.means_subject == TRUE) {
                         if (component->means_subject == TRUE) {
-                            /**
-                                TODO    If here, the whole query rappresents an empty set due it
-                                        is required that the subject is not equal to the subject
-                                        himself (impossible). Free the whole collected statements
-                                        and return NULL
+                            /*
+                                If here, the whole query rappresents an empty set due it
+                                is required that the subject is not equal to the subject
+                                himself (impossible). Free the whole collected statements
+                                and return NULL
                             */
-                            stat = NULL;
+                            easy_list_free (statements);
+                            statements = NULL;
+                            break;
                         }
                         else {
                             stat = g_strdup_printf ("?item %s ?var%d . FILTER ( ?var%d %s ?item )",
@@ -1237,7 +1235,11 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
     }
 
     *offset = value_offset;
-    return g_list_reverse (statements);
+
+    if (statements != NULL)
+        return g_list_reverse (statements);
+    else
+        return NULL;
 }
 
 static gchar* build_sparql_query (gchar *selection, gchar to_get, GList *statements)
@@ -1341,14 +1343,16 @@ static GList* collect_children_from_storage (HierarchyNode *node, ItemHandler *p
     values_offset = 0;
 
     more_statements = condition_policy_to_sparql (&(node->priv->self_policy), parent, &values_offset);
-    statements = g_list_concat (statements, more_statements);
+    if (more_statements != NULL)
+        statements = g_list_concat (statements, more_statements);
 
     if (node->priv->child_policy.inherit == TRUE) {
         parent_node = node->priv->node;
 
         while (parent_node != NULL) {
             more_statements = condition_policy_to_sparql (&(parent_node->priv->child_policy), parent, &values_offset);
-            statements = g_list_concat (statements, more_statements);
+            if (more_statements != NULL)
+                statements = g_list_concat (statements, more_statements);
 
             if (parent_node->priv->child_policy.inherit == TRUE)
                 parent_node = parent_node->priv->node;
