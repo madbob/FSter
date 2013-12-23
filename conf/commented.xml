@@ -1,0 +1,160 @@
+<?xml version="1.0" encoding="utf-8"?>
+<conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="./FSter.xsd">
+
+    <!-- This is the hierarchy to be browseable -->
+    <exposing_tree>
+        <root>
+
+            <!-- Each node has a "visualization_policy", describing what and how rappresents -->
+            <visualization_policy>
+                <content>
+
+                    <!-- The "static_folder" node is just a folder with a given, static name. This folder is named "Some Audio File" and
+                         will contains all audio files which size is > 1MB -->
+                    <static_folder>
+                        <visualization_policy>
+
+                            <!-- The fixed name of the "static_folder" -->
+                            <name value="Some Audio File" />
+
+                            <content>
+
+                                <!-- The "file" node explodes is effective files, filtered by a set of conditions -->
+                                <file>
+                                    <visualization_policy>
+
+                                        <!-- "self_conditions" is the set of conditions an item has to match to be included in this context -->
+                                        <self_conditions>
+                                            <!-- Translates in the SPARQL query ?a rdf:type nfo:Audio. The operator is "is" by default -->
+                                            <condition metadata="rdf:type" value="nfo:Audio" />
+                                            <!-- Translates in the SPARQL query ?a nfo:fileLastAccessed ?b . FILTER (?b <= "2013-12-31T00:00:00") -->
+                                            <condition metadata="nfo:fileLastAccessed" operator="minor" value="2013-12-31T00:00:00Z" />
+                                            <!-- Translates in the SPARQL query ?a nie:byteSize ?b . FILTER (?b >= 1048576) -->
+                                            <condition metadata="nie:byteSize" operator="major" value="1048576" />
+                                            <!-- Translates in the SPARQL query ?a nie:mimeType ?b . FILTER (?b != "audio/ogg") -->
+                                            <condition metadata="nie:mimeType" operator="isnot" value="audio/ogg" />
+                                        </self_conditions>
+
+                                        <!-- The filename of items involved in this node. Note the $self{} syntax, meaning that the given
+                                             metadata from the target file will be used as filename. Defining a value such as "foobar",
+                                             all files here will have filename "foobar" -->
+                                        <name value="$self{nie:title}" />
+
+                                        <!-- The "content" node describes what the file contains once opened -->
+                                        <content>
+                                            <!-- "real_file" just links the file to a real file on the filesystem. The URL of that file
+                                                 is defined by the value of the "metadata" attribute -->
+                                            <real_file metadata="nie:url" />
+                                        </content>
+                                    </visualization_policy>
+                                </file>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+
+                    <!-- Here we defined another static folder, which is going to contain main other folders -->
+                    <static_folder>
+                        <visualization_policy>
+                            <name value="Audio By Type" />
+
+                            <content>
+
+                                <!-- The "set_folder" node explodes is many folders, one for each value assumed by the given metadata in
+                                     items filtered by self_conditions. It this special case, just rdf:type = nfo:Audio files are took and
+                                     for each existing nie:mimeType a folder is created. For each value a virtual internal item is
+                                     allocated, so to permit internal configuration to use the $parent{} syntax (see below) -->
+                                <set_folder metadata="nie:mimeType">
+                                    <visualization_policy>
+
+                                        <!-- Those "self_conditions" refer to the filter to apply collecting values for the set_folder node -->
+                                        <self_conditions>
+                                            <condition metadata="rdf:type" value="nfo:Audio" />
+                                        </self_conditions>
+
+                                        <content>
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <!-- Note here the $parent{} syntax. This permits to use the value of the given
+                                                             metadata, not from the target item but from the parent's node -->
+                                                        <condition metadata="nie:mimeType" value="$parent{nie:mimeType}" />
+                                                    </self_conditions>
+
+                                                    <name value="$self{nie:title}" />
+
+                                                    <content>
+                                                        <real_file metadata="nie:url" />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+                                        </content>
+                                    </visualization_policy>
+                                </set_folder>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+
+                    <!-- Yet another example static folder containing dynamic stuffs -->
+                    <static_folder>
+                        <visualization_policy>
+                            <name value="Audioception" />
+
+                            <content>
+
+                                <!-- The "set_folder" node explodes is many folders, one for each value assumed by the given metadata in
+                                     items filtered by self_conditions. It this special case, just rdf:type = nfo:Audio files are took and
+                                     for each existing nie:mimeType a folder is created. For each value a virtual internal item is
+                                     allocated, so to permit internal configuration to use the $parent{} syntax (see below) -->
+                                <folder>
+                                    <visualization_policy>
+
+                                        <!-- Those "self_conditions" refer to the filter to apply collecting values for the set_folder node -->
+                                        <self_conditions>
+                                            <condition metadata="rdf:type" value="nfo:Audio" />
+                                            <condition metadata="nie:byteSize" operator="major" value="3145728" />
+                                            <condition metadata="nmm:performer" operator="isnot" value="" />
+                                            <condition metadata="nmm:musicAlbum" operator="isnot" value="" />
+                                        </self_conditions>
+
+                                        <name value="$self{nie:title}" />
+
+                                        <content>
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <condition metadata="/subject" value="$parent{nmm:performer}" />
+                                                    </self_conditions>
+
+                                                    <name value="$self{nie:title}" />
+
+                                                    <content>
+                                                        <dump_metadata />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <condition metadata="/subject" value="$parent{nmm:musicAlbum}" />
+                                                    </self_conditions>
+
+                                                    <name value="$self{nie:title}" />
+
+                                                    <content>
+                                                        <dump_metadata />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+                                        </content>
+                                    </visualization_policy>
+                                </folder>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+                </content>
+            </visualization_policy>
+        </root>
+    </exposing_tree>
+    <saving_tree />
+</conf>

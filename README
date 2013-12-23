@@ -29,6 +29,36 @@ If filesystem stop responding (e.g. an `ls` command on your mountpoint replies
 something like "Transport endpoint is not connected"), do
 # fusermount -uz /your/preferred/mountpoint
 
+CONFIGURATION
+-------------------------------------------------------------------------------
+FSter is configured by an XML file, formalized by the conf/FSter.xsd schema,
+describing the desired hierarchy. In the conf/ folder you find some examples:
+
+  - media.xml simply dispose all files in folders by their essential type
+    (audio files, images and videos)
+  - music.xml collects music files aggregated by album, artist or genre (by
+    their ID3 tags)
+  - commented.xml is a demostrative hierarchy, commented line by line, sporting
+    most of the possibilities
+
+In general, you have an <exposing_tree> in which are defined many nodes.
+
+Some of them may contain other nodes, such as:
+
+  - <folder> shows a folder for each RDF subject in the repository matching
+    with defined conditions
+  - <static_folder> shows a single folder with a static name
+  - <set_folder> shows a folder for each value assumed by the specified RDF
+    predicate in the store
+
+Other kind of nodes cannot contain other items in configuration, such as:
+
+  - <file> shows a file for each RDF subject in the repository matching with
+    defined conditions
+  - <mirror_content> maps 1:1 a folder from the effective filesystem, and all
+    his underlaying hierarchy
+  - <system_folders> do the same thing of <mirror_content base_path="/">
+
 COPYRIGHT AND LICENSING
 -------------------------------------------------------------------------------
 FSter is released under the terms of the GNU General Public License, version 3
@@ -36,3 +66,4 @@ or, at your option, any later version.
 
 FSter is Copyright (C) 2010  Itsme S.r.L.
          Copyright (C) 2012/2013  Roberto Guido <roberto.guido@linux.it>
+

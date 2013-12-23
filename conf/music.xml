@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<conf xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="./FSter.xsd">
+    <!--
+    Name: FSter Music library
+    Author: Lorenzo Bellini <lorenzo.bellini@itsme.it>
+    Owner: itsme srl
+    Version: 0.1.20100107
+
+    With this configuration of FSter you can navigate and use music files, that you have on your harddisk, organized by artist, album or genre
+
+    -->
+    <exposing_tree>
+        <root>
+            <visualization_policy>
+                <content>
+                    <static_folder>
+                        <visualization_policy>
+                            <name value="Artists" />
+                            <content>
+                                <folder>
+                                    <visualization_policy>
+                                        <self_conditions>
+                                            <condition metadata="rdf:type" value="nmm:Artist" />
+                                        </self_conditions>
+                                        <name value="$self{nmm:artistName}" />
+                                        <content>
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <condition metadata="nmm:performer" value="$parent{/subject}" />
+                                                    </self_conditions>
+                                                    <name value="$self{nie:title}" />
+                                                    <content>
+                                                        <real_file metadata="nie:url" />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+                                        </content>
+                                    </visualization_policy>
+                                </folder>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+                    <static_folder>
+                        <visualization_policy>
+                            <name value="Albums" />
+                            <content>
+                                <folder>
+                                    <visualization_policy>
+                                        <self_conditions>
+                                            <condition metadata="rdf:type" value="nmm:MusicAlbum" />
+                                        </self_conditions>
+                                        <name value="$self{nmm:albumTitle}" />
+                                        <content>
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <condition metadata="nmm:musicAlbum" value="$parent{/subject}" />
+                                                    </self_conditions>
+                                                    <name value="$self{nie:title}" />
+                                                    <content>
+                                                        <real_file metadata="nie:url" />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+                                        </content>
+                                    </visualization_policy>
+                                </folder>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+                    <static_folder>
+                        <visualization_policy>
+                            <name value="Genres" />
+                            <content>
+                                <set_folder metadata="nfo:genre">
+                                    <visualization_policy>
+                                        <content>
+                                            <file>
+                                                <visualization_policy>
+                                                    <self_conditions>
+                                                        <condition metadata="nfo:genre" value="$parent{nfo:genre}" />
+                                                    </self_conditions>
+                                                    <name value="$self{nie:title}" />
+                                                    <content>
+                                                        <real_file metadata="nie:url" />
+                                                    </content>
+                                                </visualization_policy>
+                                            </file>
+                                        </content>
+                                    </visualization_policy>
+                                </set_folder>
+                            </content>
+                        </visualization_policy>
+                    </static_folder>
+                </content>
+            </visualization_policy>
+        </root>
+    </exposing_tree>
+    <saving_tree />
+</conf>
