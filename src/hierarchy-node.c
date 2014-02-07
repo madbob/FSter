@@ -456,8 +456,8 @@ static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, x
             }
             else {
                 value = (gchar*) xmlGetProp (node, (xmlChar*) "query");
-
                 if (value != NULL) {
+		  g_warning("found %s", value);
                     ref->involved = parse_reference_formula (value, &(ref->query));
                 }
                 else {
@@ -1428,8 +1428,8 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     n = scandir (path, &namelist, NULL, alphasort);
     loop = gfuse_loop_get_current ();
 
-    for (i = 2; i < n; i++) {
-        if (namelist [i]->d_name == NULL)
+    for (i = 0; i < n; i++) {
+      if (namelist [i]->d_name == NULL || strcmp (namelist [i]->d_name, ".") || strcmp (namelist [i]->d_name, ".."))
             continue;
 
         item_path = g_build_filename (path, namelist [i]->d_name, NULL);
@@ -1469,8 +1469,8 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
         free (namelist [i]);
     }
 
+    if (namelist [1] != NULL ) free (namelist [1]);
     free (namelist [0]);
-    free (namelist [1]);
     free (namelist);
 
     if (ret != NULL)
