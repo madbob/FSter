@@ -494,7 +494,10 @@ static int ifs_rename (const char *from, const char *to)
             return res;
     }
 
-    replace_hierarchy_node (start, target);
+    res = replace_hierarchy_node (start, target);
+    if (res != 0)
+        return res;
+
     nodes_cache_remove_by_path (get_cache_reference (), from);
     return 0;
 }
@@ -871,7 +874,13 @@ static gchar* read_configuration (int *fsize)
 
     f = fopen (Config.conf_file, "rb");
     fseek (f, 0, SEEK_END);
+
     *fsize = (int) ftell (f);
+    if (*fsize == 0) {
+        g_warning ("Empty configuration file");
+        return NULL;
+    }
+
     fseek (f, 0, SEEK_SET);
 
     string = g_malloc (*fsize + 1);
@@ -879,7 +888,6 @@ static gchar* read_configuration (int *fsize)
     fclose (f);
 
     string [*fsize] = 0;
-
     offset = string;
 
     while (TRUE) {

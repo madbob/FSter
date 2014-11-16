@@ -95,7 +95,7 @@ gboolean        item_handler_is_folder          (ItemHandler *item);
 const gchar*    item_handler_real_path          (ItemHandler *item);
 
 ItemHandler*    item_handler_attach_child       (ItemHandler *item, NODE_TYPE type, const gchar *newname);
-void            item_handler_remove             (ItemHandler *item);
+int             item_handler_remove             (ItemHandler *item);
 
 const gchar*    item_handler_get_subject        (ItemHandler *item);
 gboolean        item_handler_type_has_metadata  (ItemHandler *item);

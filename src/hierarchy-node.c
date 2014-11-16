@@ -1016,7 +1016,7 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
             value or a specific other metadata, embedding that condition in the main SPARQL query
         */
 
-        if (involved_num == 1 && meta_ref->formula != NULL && strcmp (meta_ref->formula, "\\1") == 0) {
+        if (involved_num == 1 && strcmp (meta_ref->formula, "\\1") == 0) {
             component = (MetadataDesc*) meta_ref->involved->data;
 
             if (component->from == METADATA_HOLDER_SELF) {
@@ -1192,10 +1192,15 @@ static GList* condition_policy_to_sparql (ConditionPolicy *policy, ItemHandler *
             g_free (val);
         }
         else {
-            if (involved_num == 0)
+            val = NULL;
+
+            if (involved_num == 0) {
                 val = g_strdup (meta_ref->formula);
-            else
-                val = compose_value_from_many_metadata (parent, meta_ref->involved, meta_ref->formula);
+            }
+            else {
+                if (parent != NULL)
+                    val = compose_value_from_many_metadata (parent, meta_ref->involved, meta_ref->formula);
+            }
 
             if (val != NULL) {
                 if (meta_ref->metadata.means_subject == TRUE) {
@@ -1283,17 +1288,18 @@ static GList* build_items (HierarchyNode *node, ItemHandler *parent, GVariant *d
 
     while (g_variant_iter_loop (iter, "as", &subiter)) {
         str = NULL;
-        g_variant_iter_loop (subiter, "s", &str);
 
-        item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", str, NULL);
+        if (g_variant_iter_loop (subiter, "s", &str)) {
+            item = g_object_new (ITEM_HANDLER_TYPE, "type", node->priv->type, "parent", parent, "node", node, "subject", str, NULL);
 
-        for (required_iter = required; required_iter && g_variant_iter_loop (subiter, "s", &str); required_iter = g_list_next (required_iter))
-            item_handler_load_metadata (item, (gchar*) required_iter->data, str);
+            for (required_iter = required; required_iter && g_variant_iter_loop (subiter, "s", &str); required_iter = g_list_next (required_iter))
+                item_handler_load_metadata (item, (gchar*) required_iter->data, str);
 
-        if (node->priv->expose_policy.contents_callback != NULL)
-            g_object_set (item, "contents_handler", node->priv->expose_policy.contents_callback, NULL);
+            if (node->priv->expose_policy.contents_callback != NULL)
+                g_object_set (item, "contents_handler", node->priv->expose_policy.contents_callback, NULL);
 
-        items = g_list_prepend (items, item);
+            items = g_list_prepend (items, item);
+        }
     }
 
     return g_list_reverse (items);
@@ -1433,9 +1439,6 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
     loop = gfuse_loop_get_current ();
 
     for (i = 2; i < n; i++) {
-        if (namelist [i]->d_name == NULL)
-            continue;
-
         item_path = g_build_filename (path, namelist [i]->d_name, NULL);
         witem = nodes_cache_get_by_path (cache, item_path);
 
@@ -1455,21 +1458,24 @@ static GList* collect_children_from_filesystem (HierarchyNode *node, ItemHandler
                 continue;
             }
 
-            stat (item_path, &sbuf);
-            if (S_ISDIR (sbuf.st_mode))
-                type = ITEM_IS_MIRROR_FOLDER;
-            else
-                type = ITEM_IS_MIRROR_ITEM;
+            if (stat (item_path, &sbuf) != -1) {
+                if (S_ISDIR (sbuf.st_mode))
+                    type = ITEM_IS_MIRROR_FOLDER;
+                else
+                    type = ITEM_IS_MIRROR_ITEM;
 
-            witem = g_object_new (ITEM_HANDLER_TYPE,
-                                    "type", type, "parent", parent,
-                                    "node", node, "file_path", item_path,
-                                    "exposed_name", namelist [i]->d_name, NULL);
+                witem = g_object_new (ITEM_HANDLER_TYPE,
+                                        "type", type, "parent", parent,
+                                        "node", node, "file_path", item_path,
+                                        "exposed_name", namelist [i]->d_name, NULL);
 
-            nodes_cache_set_by_path (cache, witem, item_path);
+                nodes_cache_set_by_path (cache, witem, item_path);
+            }
         }
 
-        ret = g_list_prepend (ret, witem);
+        if (witem != NULL)
+            ret = g_list_prepend (ret, witem);
+
         free (namelist [i]);
     }
 
@@ -1552,16 +1558,17 @@ static GList* collect_children_set (HierarchyNode *node, ItemHandler *parent)
 
     while (g_variant_iter_loop (iter, "as", &subiter)) {
         uri = NULL;
-        g_variant_iter_loop (subiter, "s", &uri);
 
-        item = g_object_new (ITEM_HANDLER_TYPE,
-                             "type", node->priv->type,
-                             "parent", parent,
-                             "node", node,
-                             "exposed_name", uri, NULL);
+        if (g_variant_iter_loop (subiter, "s", &uri)) {
+            item = g_object_new (ITEM_HANDLER_TYPE,
+                                 "type", node->priv->type,
+                                 "parent", parent,
+                                 "node", node,
+                                 "exposed_name", uri, NULL);
 
-        item_handler_load_metadata (item, node->priv->additional_option, uri);
-        items = g_list_prepend (items, item);
+            item_handler_load_metadata (item, node->priv->additional_option, uri);
+            items = g_list_prepend (items, item);
+        }
     }
 
     g_variant_unref (response);
@@ -1859,7 +1866,7 @@ static void inherit_metadata (HierarchyNode *node, ItemHandler *item, ItemHandle
         inherit_metadata (node->priv->node, item, item_handler_get_parent (parent));
 }
 
-static void assign_path (ItemHandler *item)
+static int assign_path (ItemHandler *item)
 {
     int fd;
     gchar *path;
@@ -1874,7 +1881,7 @@ static void assign_path (ItemHandler *item)
     if (node->priv->save_policy.hijack_folder == NULL) {
         if (SavingPath == NULL) {
             g_warning ("Saving path is not set, unable to save the file");
-            return;
+            return -1;
         }
 
         /**
@@ -1889,6 +1896,11 @@ static void assign_path (ItemHandler *item)
         }
         else {
             fd = mkstemp (path);
+            if (fd < 0) {
+                g_free (path);
+                return -1;
+            }
+
             close (fd);
         }
 
@@ -1933,6 +1945,7 @@ static void assign_path (ItemHandler *item)
 
     g_object_set (item, "file_path", path, NULL);
     g_free (path);
+    return 0;
 }
 
 /**
@@ -1946,10 +1959,11 @@ static void assign_path (ItemHandler *item)
  * will be assigned to a file in the real filesystem and will be eventually assigned a set of
  * metadata
  *
- * Return value: the newly created #ItemHandler
+ * Return value: the newly created #ItemHandler, or %NULL
  **/
 ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemHandler *parent, const gchar *newname)
 {
+    int test;
     ItemHandler *new_item;
 
     if (node->priv->save_policy.writable == FALSE) {
@@ -1968,20 +1982,27 @@ ItemHandler* hierarchy_node_add_item (HierarchyNode *node, NODE_TYPE type, ItemH
         /*
             Path is assigned before inherited metadata to permit recall nie:url
         */
-        assign_path (new_item);
-
-        retrieve_metadata_by_name (node, new_item, parent, newname);
-        inherit_metadata (node, new_item, parent);
-        item_handler_flush (new_item);
+        test = assign_path (new_item);
+        if (test == 0) {
+            retrieve_metadata_by_name (node, new_item, parent, newname);
+            inherit_metadata (node, new_item, parent);
+            item_handler_flush (new_item);
+        }
     }
     else {
         new_item = item_handler_new_alloc (type == NODE_IS_FOLDER ? ITEM_IS_MIRROR_FOLDER : ITEM_IS_MIRROR_ITEM, node, parent);
         g_object_set (new_item, "exposed_name", newname, NULL);
 
-        assign_path (new_item);
+        test = assign_path (new_item);
     }
 
-    return new_item;
+    if (test != 0) {
+        g_object_unref (new_item);
+        return NULL;
+    }
+    else {
+        return new_item;
+    }
 }
 
 /**

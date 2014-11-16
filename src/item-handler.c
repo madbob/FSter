@@ -74,7 +74,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
 {
     gboolean to_free;
     gchar *stats;
-    gchar *tys;
     gchar *query;
     gchar *useless;
     gchar *uri;
@@ -82,7 +81,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     gpointer key;
     gpointer value;
     GList *statements;
-    GList *types;
     GHashTable *table;
     GHashTableIter iter;
     GVariant *results;
@@ -96,7 +94,6 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
     Property *prop;
 
     statements = NULL;
-    types = NULL;
     va_start (params, item);
 
     while ((table = va_arg (params, GHashTable*)) != NULL) {
@@ -134,16 +131,7 @@ static void flush_pending_metadata_to_save (ItemHandler *item, ...)
         return;
 
     stats = from_glist_to_string (statements, " ; ", TRUE);
-
-    if (types == NULL) {
-        query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s }", stats);
-    }
-    else {
-        tys = from_glist_to_string (types, " ; ", TRUE);
-        query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s ; %s }", tys, stats);
-        g_free (tys);
-    }
-
+    query = g_strdup_printf ("INSERT { _:item a nfo:FileDataObject ; a nie:InformationElement ; %s }", stats);
     g_free (stats);
 
     error = NULL;
@@ -207,6 +195,9 @@ static gchar* escape_exposed_name (const gchar *str)
     register int e;
     int len;
     gchar *final;
+
+    if (str == NULL || *str == '\0')
+        return g_strdup ("");
 
     len = strlen (str);
     final = alloca (len);
@@ -845,8 +836,11 @@ void item_handler_close (ItemHandler *item, int fd)
  * deleting the real file it wraps.
  * Attention: this function do not update the running nodes cache, please
  * provide elsewhere
+ *
+ * Return value: 0 if the required item has been removed, or a negative value
+ * holding the relative errno
  */
-void item_handler_remove (ItemHandler *item)
+int item_handler_remove (ItemHandler *item)
 {
     const gchar *id;
     gchar *query;
@@ -862,13 +856,16 @@ void item_handler_remove (ItemHandler *item)
         if (error != NULL) {
             g_warning ("Error while removing item: %s", error->message);
             g_error_free (error);
-            return;
+            return -ENOENT;
         }
     }
 
     id = get_file_path (item);
     if (id != NULL)
-        remove (id);
+        if (remove (id) == -1)
+            return -errno;
+
+    return 0;
 }
 
 /**
@@ -898,7 +895,7 @@ int item_handler_stat (ItemHandler *item, struct stat *sbuf)
         For "mirror" items, we just get the original stat() result
     */
     if (IS_MIRROR (item_handler_get_format (item)) == FALSE && item_handler_is_folder (item)) {
-        sbuf->st_mode &= !(S_IFREG);
+        sbuf->st_mode &= ~S_IFREG;
         sbuf->st_mode |= S_IFDIR;
     }
 

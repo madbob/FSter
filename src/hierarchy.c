@@ -28,15 +28,18 @@ static HierarchyNode                    *ExposingTree               = NULL;
 static NodesCache                       *Cache                      = NULL;
 static GHashTable                       *Params                     = NULL;
 
-static void create_dummy_references ()
+static int create_dummy_references ()
 {
     gchar *path;
 
     path = DUMMY_FILEPATH;
     fclose (fopen (path, "w"));
 
-    mkdir (FAKE_SAVING_FOLDER, 0770);
-    mkdir (DUMMY_DIRPATH, 0770);
+    if (mkdir (FAKE_SAVING_FOLDER, 0770) != -1 || errno == EEXIST)
+        if (mkdir (DUMMY_DIRPATH, 0770) != -1 || errno == EEXIST)
+            return 0;
+
+    return -errno;
 }
 
 static void load_plugins ()
@@ -71,7 +74,7 @@ static void load_plugins ()
                 g_free (plug_path);
                 plugin_registrar = dlsym (plug_handler, "load_contents_plugin_type");
                 LoadedContentsPlugins = g_list_prepend (LoadedContentsPlugins, g_object_new (plugin_registrar (), NULL));
-                // dlclose (plug_handler);
+                dlclose (plug_handler);
             }
 
             free (namelist [i]);
@@ -87,6 +90,11 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
     gchar *str;
     xmlNode *root;
     xmlNode *node;
+
+    if (create_dummy_references () != 0) {
+        g_warning ("Error: unable to create references on the filesystem");
+        return;
+    }
 
     root = xmlDocGetRootElement (doc);
     if (strcmp ((gchar*) root->name, "conf") != 0) {
@@ -122,7 +130,6 @@ void build_hierarchy_tree_from_xml (xmlDocPtr doc)
     if (saving_set == FALSE)
         hierarchy_node_set_save_path (DEFAULT_SAVE_PATH);
 
-    create_dummy_references ();
     Cache = nodes_cache_new ();
 }
 
@@ -297,31 +304,58 @@ HierarchyNode* node_at_path (const gchar *path)
     return level;
 }
 
-void replace_hierarchy_node (ItemHandler *old_item, ItemHandler *new_item)
+int replace_hierarchy_node (ItemHandler *old_item, ItemHandler *new_item)
 {
+    int stat;
     int first;
     int second;
+    int error;
     gchar *buffer;
     struct stat sbuf;
 
-    if (item_handler_stat (old_item, &sbuf) != 0)
-        return;
+    error = 0;
+    first = -1;
+    second = -1;
+
+    stat = item_handler_stat (old_item, &sbuf);
+    if (stat != 0)
+        return stat;
 
     first = item_handler_open (old_item, O_RDONLY);
-    second = item_handler_open (new_item, O_WRONLY);
+    if (first < 0) {
+        error = first;
+    }
+    else {
+        second = item_handler_open (new_item, O_WRONLY);
+        if (second < 0) {
+            error = second;
+        }
+        else {
+            buffer = alloca (sbuf.st_size);
 
-    buffer = alloca (sbuf.st_size);
-    read (first, buffer, sbuf.st_size);
-    write (second, buffer, sbuf.st_size);
+            if (read (first, buffer, sbuf.st_size) == -1) {
+                error = -errno;
+            }
+            else {
+                if (write (second, buffer, sbuf.st_size) == -1)
+                    error = -errno;
+            }
+        }
+    }
 
-    item_handler_close (old_item, first);
-    item_handler_close (new_item, second);
+    if (first >= 0)
+        item_handler_close (old_item, first);
+    if (second >= 0)
+        item_handler_close (new_item, second);
 
     /**
         TODO    Perhaps also metadata have to be moved?
     */
 
-    item_handler_remove (old_item);
+    if (error == 0)
+        item_handler_remove (old_item);
+
+    return error;
 }
 
 ContentsPlugin* retrieve_contents_plugin (gchar *name)
