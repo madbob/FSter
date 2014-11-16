@@ -53,6 +53,11 @@ typedef struct {
 } MetadataDesc;
 
 typedef struct {
+    int                 pos;
+    GList               *metadatalist;
+} ParsingFormula;
+
+typedef struct {
     MetadataDesc        metadata;
     gchar               *formula;
     gchar               *query;
@@ -241,6 +246,58 @@ static void hierarchy_node_init (HierarchyNode *node)
     memset (node->priv, 0, sizeof (HierarchyNodePrivate));
 }
 
+static gboolean parse_formula_token (const GMatchInfo *info, GString *res, gpointer data)
+{
+    gchar *starter;
+    gchar *metaname;
+    const gchar *param_value;
+    MetadataDesc *meta;
+    ParsingFormula *parsing;
+
+    parsing = data;
+    starter = g_match_info_fetch (info, 0);
+    metaname = g_match_info_fetch (info, 1);
+
+    if (starter [0] == '$') {
+        meta = g_new0 (MetadataDesc, 1);
+
+        if (strcmp (starter + 1, "self") == 0)
+            meta->from = METADATA_HOLDER_SELF;
+        else if (strcmp (starter + 1, "parent") == 0)
+            meta->from = METADATA_HOLDER_PARENT;
+
+        if (strcmp (metaname, "/subject") == 0) {
+            meta->means_subject = TRUE;
+        }
+        else {
+            meta->metadata = properties_pool_get_by_name (metaname);
+            if (meta->metadata == NULL) {
+                g_warning ("Unable to retrieve metadata claimed in rule: %s. Stop parsing.\n", metaname);
+                g_free (meta);
+                g_free (starter);
+                g_free (metaname);
+                return TRUE;
+            }
+        }
+
+        parsing->metadatalist = g_list_prepend (parsing->metadatalist, meta);
+        g_string_append_printf (res, "\\%d", parsing->pos);
+        parsing->pos++;
+    }
+    else if (strcmp (starter, "#") == 0) {
+        param_value = get_user_param (metaname);
+
+        if (param_value == NULL)
+            g_warning ("Parameter %s was not set, fallback to empty string\n", metaname);
+        else
+            g_string_append_printf (res, "%s", param_value);
+    }
+
+    g_free (starter);
+    g_free (metaname);
+    return FALSE;
+}
+
 /*
     A formula such as
     some_text $parent{predicate} blabla #{param}
@@ -252,128 +309,35 @@ static void hierarchy_node_init (HierarchyNode *node)
 */
 static GList* parse_reference_formula (gchar *value, gchar **output)
 {
-    int i;
-    int e;
-    int token_pos;
-    int offset;
-    gboolean handled;
-    gchar *meta_name;
-    gchar *end_name;
-    const gchar *param_value;
     GList *ret;
-    GString *formula;
-    MetadataDesc *meta;
+    GRegex *regex;
+    GError *error;
+    ParsingFormula *parsing;
 
-    i = 0;
-    e = 0;
-    token_pos = 1;
-    meta = NULL;
-    ret = NULL;
-    formula = g_string_new ("");
+    /*
+        Admitted formulas:
+        $self{metadata:name}
+        $parent{metadata:name}
+        $self{/subject}
+        $parent{/subject}
+        #{NUM}
+    */
+    regex = g_regex_new ("(\\$self|\\$parent|\\#)\\{(.*)\\}", 0, 0, NULL);
+    error = NULL;
 
-    while (value [i] != '\0') {
-        handled = FALSE;
+    parsing = g_new0 (ParsingFormula, 1);
+    parsing->pos = 1;
+    parsing->metadatalist = NULL;
 
-        if (value [i] == '$') {
-            if (meta == NULL)
-                meta = g_new0 (MetadataDesc, 1);
+    *output = g_regex_replace_eval (regex, value, -1, 0, 0, parse_formula_token, &parsing, &error);
 
-            do {
-                if (strncmp (value + i + 1, "parent", 6) == 0) {
-                    meta->from = METADATA_HOLDER_PARENT;
-                    offset = 6;
-                }
-                else if (strncmp (value + i + 1, "self", 4) == 0) {
-                    meta->from = METADATA_HOLDER_SELF;
-                    offset = 4;
-                }
-                else
-                    break;
-
-                meta_name = value + i + 1 + offset;
-
-                if (*meta_name != '{')
-                    break;
-
-                meta_name++;
-
-                end_name = strchr (meta_name, '}');
-                if (end_name == NULL)
-                    break;
-
-                *end_name = '\0';
-                handled = TRUE;
-
-                if (strcmp (meta_name, "/subject") == 0) {
-                    meta->means_subject = TRUE;
-                }
-                else {
-                    meta->metadata = properties_pool_get_by_name (meta_name);
-                    if (meta->metadata == NULL) {
-                        g_warning ("Unable to retrieve metadata claimed in rule: %s\n", meta_name);
-                        handled = FALSE;
-                        break;
-                    }
-                }
-
-                /*
-                    If the required metadata is not found among the set of available properties,
-                    just fallback skipping that portion of formula
-                */
-
-                if (handled == TRUE) {
-                    ret = g_list_prepend (ret, meta);
-                    g_string_append_printf (formula, "\\%d", token_pos);
-                    token_pos++;
-                }
-
-                meta = NULL;
-                handled = TRUE;
-                i += 1 + offset + strlen (meta_name) + 2;
-
-            } while (0);
-        }
-        else if (value [i] == '#') {
-            do {
-                if (value [i + 1] != '{')
-                    break;
-
-                meta_name = value + i + 2;
-
-                end_name = strchr (meta_name, '}');
-                if (end_name == NULL)
-                    break;
-
-                *end_name = '\0';
-                param_value = get_user_param (meta_name);
-
-                if (param_value == NULL)
-                    g_warning ("Parameter %s was not set, fallback to empty string\n", meta_name);
-                else
-                    g_string_append_printf (formula, "%s", param_value);
-
-                handled = TRUE;
-                i += strlen (meta_name) + 2;
-
-            } while (0);
-        }
-
-        if (handled == FALSE) {
-            g_string_append_c (formula, value [i]);
-            e++;
-            i++;
-        }
-    }
-
-    if (meta != NULL)
-        g_free (meta);
-
-    *output = g_string_free (formula, FALSE);
-
-    if (ret != NULL)
-        return g_list_reverse (ret);
+    if (parsing->metadatalist != NULL)
+        ret = g_list_reverse (parsing->metadatalist);
     else
-        return NULL;
+        ret = NULL;
+
+    g_free (parsing);
+    return ret;
 }
 
 static ValuedMetadataReference* parse_reference_to_metadata (const gchar *tag, xmlNode *node)
